@@ -4,22 +4,26 @@
   "description": "Static assets for OpenWebif interface",
   "main": "index.js",
   "devDependencies": {
+    "autoprefixer": "^10.4.20",
     "clean-css": "^5.1.2",
-    "clean-css-cli": "^5.3.0",
+    "clean-css-cli": "^5.6.3",
     "commander": "^7.2.0",
     "glob-uglifyjs": "^2.0.0",
+    "lightningcss": "^1.28.2",
+    "lightningcss-cli": "^1.28.2",
     "mkdirp": "^1.0.4",
-    "node-sass": "^7.0.1",
+    "postcss": "^8.4.49",
+    "postcss-cli": "^11.0.0",
     "prettier": "^2.3.1",
-    "sass": "^1.53.0"
+    "sass": "^1.81.0"
   },
   "resolutions": {
     "node-forge": "~0.10.0",
-    "yargs-parser": "^20.2.7",
-    "glob-parent": "^5.1.2",
-    "css-what": "^5.0.1",
-    "normalize-url": "^4.5.1",
-    "postcss": "^8.2.10"
+    "yargs-parser": "20.2.7",
+    "glob-parent": "5.1.2",
+    "css-what": "5.0.1",
+    "normalize-url": "4.5.1",
+    "postcss": "8.4.49"
   },
   "browserslist": [
     "defaults"
@@ -28,9 +32,10 @@
     "preinstall": "npx npm-force-resolutions",
     "build-classic-js": "npx glob-uglifyjs -c ./classic-glob-uglifyjs.config",
     "build-js": "npm run build-prod --prefix modern",
-    "build-css": "node ./_utils/mincss.js -o '../plugin/public/' './modern/css/**/*.css'",
+    "prepare-modern-css": "sass ./modern/modern-scss/style.scss ./modern/css/style.css && postcss ./modern/css/style.css --use autoprefixer -o ./modern/css/style.css",
+    "build-css": "npm run prepare-modern-css && node ./_utils/mincss.js -o '../plugin/public/' './modern/css/**/*.css' && rm ./modern/css/style.css",
     "build-css-themes": "node ./_utils/mincss.js -o '../plugin/public/' './themes/*.css'",
-    "build-classic-css": "node-sass './scss/style.scss' '../plugin/public/css/style.min.css' --output-style compressed",
+    "build-classic-css": "sass './scss/style.scss' './scss/temp.css' && lightningcss --minify './scss/temp.css' -o '../plugin/public/css/style.min.css' && rm ./scss/temp.css",
     "test": "echo 'Error: no test specified!' && exit 1"
   },
   "repository": {
@@ -45,6 +50,6 @@
   "homepage": "https://github.com/oe-alliance/OpenWebif#readme",
   "dependencies": {
     "path-exists": "^5.0.0",
-    "semver": "^7.3.7"
+    "semver": "^7.8.4"
   }
 }

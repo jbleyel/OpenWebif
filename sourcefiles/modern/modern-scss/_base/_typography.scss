@@ -1,0 +1,64 @@
+//@use "../_abstracts/mixins";
+//@include mixins.font-size-loop(6, 50);
+
+body {
+	background-color: #e9e9e9;
+	-moz-transition: all 0.5s;
+	-o-transition: all 0.5s;
+	-webkit-transition: all 0.5s;
+	transition: all 0.5s;
+	font-family: Roboto, Arial, Tahoma, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-weight: bold;
+}
+
+.font-12 {
+	font-size: 12px;
+}
+
+.align-left {
+	text-align: left;
+}
+
+.align-center {
+	text-align: center;
+}
+
+.align-right {
+	text-align: right;
+}
+
+.align-justify {
+	text-align: justify;
+}
+
+.no-resize {
+	resize: none;
+}
+
+.font-bold {
+	font-weight: bold;
+}
+
+.font-italic {
+	font-style: italic;
+}
+
+.font-underline {
+	text-decoration: underline;
+}
+
+.font-line-through {
+	text-decoration: line-through;
+}
+
+.font-overline {
+	text-decoration: overline;
+}

@@ -1,7 +1,7 @@
 ##########################################################################
 # OpenWebif: info
 ##########################################################################
-# Copyright (C) 2011 - 2022 E2OpenPlugins
+# Copyright (C) 2011 - 2025 E2OpenPlugins, jbleyel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -18,13 +18,13 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
 ##########################################################################
 
-import os
-import time
+from os import popen, statvfs
+from os.path import exists, isdir, realpath
+from time import localtime, strftime
 from twisted import version
 from socket import has_ipv6, AF_INET6, AF_INET, inet_ntop, inet_pton, getaddrinfo
 
 from enigma import eDVBVolumecontrol, eServiceCenter, eServiceReference, getEnigmaVersionString
-from Components.About import about
 from Components.config import config
 from Components.Harddisk import harddiskmanager
 from Components.NimManager import nimmanager
@@ -35,7 +35,6 @@ from RecordTimer import parseEvent, RecordTimerEntry
 from ServiceReference import ServiceReference
 from Screens.InfoBar import InfoBar
 from timer import TimerEntry
-from Tools.Directories import fileExists
 
 from ..i18n import _
 from ..defaults import OPENWEBIFVER, TRANSCODING, TEXTINPUTSUPPORT, LCD, GRABPIP
@@ -50,7 +49,7 @@ NI = "/etc/network/interfaces"
 def getIPMethod(iface):
 	# iNetwork.getAdapterAttribute is crap and not portable
 	ipmethod = _("SLAAC")
-	if fileExists(NI):
+	if exists(NI):
 		ifaces = NI
 		for line in open(ifaces).readlines():
 			if not line.startswith("#"):
@@ -69,7 +68,7 @@ def getIPMethod(iface):
 def getIPv4Method(iface):
 	# iNetwork.getAdapterAttribute is crap and not portable
 	ipv4method = _("static")
-	if fileExists(NI):
+	if exists(NI):
 		ifaces = NI
 		for line in open(ifaces).readlines():
 			if not line.startswith("#"):
@@ -89,9 +88,9 @@ def getLinkSpeed(iface):
 		with open(f"/sys/class/net/{iface}/speed") as f:
 			speed = f.read().strip()
 	except:  # nosec # noqa: E722
-		if os.path.isdir(f"/sys/class/net/{iface}/wireless"):
+		if isdir(f"/sys/class/net/{iface}/wireless"):
 			try:
-				speed = os.popen(f'iwlist {iface} bitrate | grep "Bit Rate"').read().split(":")[1].split(" ")[0]
+				speed = popen(f'iwlist {iface} bitrate | grep "Bit Rate"').read().split(":")[1].split(" ")[0]
 			except:  # nosec # noqa: E722
 				pass
 	speed = str(speed) + " MBit/s"
@@ -103,8 +102,7 @@ def getLinkSpeed(iface):
 def getNICChipSet(iface):
 	nic = _("unknown")
 	try:
-		nic = os.path.realpath("/sys/class/net/" + iface + "/device/driver").split("/")[-1]
-		nic = str(nic)
+		nic = str(realpath(f"/sys/class/net/{iface}/device/driver").split("/")[-1])
 	except:  # nosec # noqa: E722
 		pass
 	return nic
@@ -132,7 +130,7 @@ def normalize_ipv6(orig):
 	addr = inet_ntop(AF_INET6, inet_pton(AF_INET6, addr))
 
 	if len(net) == 2:
-		addr += "/" + net[1]
+		addr += f"/{net[1]}"
 
 	return (addr)
 
@@ -141,7 +139,7 @@ def getAdapterIPv6(ifname):
 	addr = _("IPv4-only kernel")
 	firstpublic = None
 
-	if fileExists("/proc/net/if_inet6"):
+	if exists("/proc/net/if_inet6"):
 		addr = _("IPv4-only Python/Twisted")
 
 		if has_ipv6 and version.major >= 12:
@@ -203,7 +201,7 @@ def getInfo(session=None, need_fullinfo=False):
 	INFOMODEL = "/proc/stb/info/model"
 
 	chipset = "unknown"
-	if fileExists("/etc/.box"):
+	if exists("/etc/.box"):
 		f = open("/etc/.box")
 		model = f.readline().strip().lower()
 		f.close()
@@ -229,7 +227,7 @@ def getInfo(session=None, need_fullinfo=False):
 				chipset = "SH4 @540MHz"
 			else:
 				chipset = "SH4 @450MHz"
-	elif fileExists("/proc/stb/info/azmodel"):
+	elif exists("/proc/stb/info/azmodel"):
 		f = open(INFOMODEL)  # TODO ??
 		model = f.readline().strip().lower()
 		f.close()
@@ -239,7 +237,7 @@ def getInfo(session=None, need_fullinfo=False):
 			chipset = "SIGMA 8653"
 		else:
 			chipset = "SIGMA 8634"
-	elif fileExists(INFOMODEL):
+	elif exists(INFOMODEL):
 		f = open(INFOMODEL)
 		model = f.readline().strip().lower()
 		f.close()
@@ -271,7 +269,7 @@ def getInfo(session=None, need_fullinfo=False):
 		elif model in ("dm900", "dm920"):
 			chipset = "bcm7252S"
 
-	if fileExists("/proc/stb/info/chipset"):
+	if exists("/proc/stb/info/chipset"):
 		f = open("/proc/stb/info/chipset")
 		chipset = f.readline().strip()
 		f.close()
@@ -312,7 +310,7 @@ def getInfo(session=None, need_fullinfo=False):
 		info["imagever"] = f"{info['imagever']}.{ib}"
 	info["enigmaver"] = getEnigmaVersionString()
 	info["driverdate"] = BoxInfo.getItem("driversdate")
-	info["kernelver"] = about.getKernelVersionString()
+	info["kernelver"] = BoxInfo.getItem("kernel")
 
 	try:
 		from Tools.StbHardware import getFPVersion
@@ -328,20 +326,21 @@ def getInfo(session=None, need_fullinfo=False):
 	friendlychipsettext = info["chipset"].replace("bcm", "Broadcom ")
 	if friendlychipsettext in ("7335", "7356", "7362", "73625", "7424", "7425", "7429"):
 		friendlychipsettext = "Broadcom " + friendlychipsettext
-	if not (info["fp_version"] is None or info["fp_version"] == 0):
-		friendlychipsetdescription = friendlychipsetdescription + " (" + _("Front processor version") + ")"
-		friendlychipsettext = friendlychipsettext + " (" + str(info["fp_version"]) + ")"
+	if info["fp_version"]:
+		friendlychipsetdescription = f'{friendlychipsetdescription} ({_("Front processor version")})'
+		friendlychipsettext = f'{friendlychipsettext} ({str(info["fp_version"])})'
 
 	info["friendlychipsetdescription"] = friendlychipsetdescription
 	info["friendlychipsettext"] = friendlychipsettext
 	info["tuners"] = []
 	for i in list(range(0, nimmanager.getSlotCount())):
-		print(f"[OpenWebif] -D- tuner '{i}' '{nimmanager.getNimName(i)}' '{nimmanager.getNim(i).getSlotName()}'")
+		# print(f"[OpenWebif] -D- tuner '{i}' '{nimmanager.getNimName(i)}' '{nimmanager.getNim(i).getSlotName()}'")
 		info["tuners"].append({
 			"name": nimmanager.getNim(i).getSlotName(),
-			"type": nimmanager.getNimName(i) + " (" + nimmanager.getNim(i).getFriendlyType() + ")",
+			"type": f"{nimmanager.getNimName(i)} ({nimmanager.getNim(i).getFriendlyType()})",
 			"rec": "",
-			"live": ""
+			"live": "",
+			"stream": ""
 		})
 
 	info["ifaces"] = []
@@ -367,7 +366,7 @@ def getInfo(session=None, need_fullinfo=False):
 	for hdd in harddiskmanager.hdd:
 		dev = hdd.findMount()
 		if dev:
-			stat = os.statvfs(dev)
+			stat = statvfs(dev)
 			free = stat.f_bavail * stat.f_frsize / 1048576.
 		else:
 			free = -1
@@ -410,13 +409,13 @@ def getInfo(session=None, need_fullinfo=False):
 			"labelled_capacity": iecsize,
 			"free": free,
 			"mount": dev,
-			"friendlycapacity": _("%s free / %s total") % (free, size + ' ("' + iecsize + '")')
+			"friendlycapacity": _("%s free / %s total") % (free, f"{size} ({iecsize})")
 		})
 
 	info["shares"] = []
 	autofiles = ("/etc/auto.network",)
 	for autofs in autofiles:
-		if fileExists(autofs):
+		if exists(autofs):
 			method = "autofs"
 			for line in open(autofs).readlines():
 				if not line.startswith("#"):
@@ -463,7 +462,7 @@ def getInfo(session=None, need_fullinfo=False):
 								tmpaddress = None
 								tmpaddress = getaddrinfo(server, 0, AF_INET6)
 								if tmpaddress:
-									ipaddress = "[" + list(tmpaddress)[0][4][0] + "]"
+									ipaddress = f"[{list(tmpaddress)[0][4][0]}]"
 							# Use IPv4 if IPv6 fails or is not present
 							if ipaddress is None:
 								tmpaddress = None
@@ -475,7 +474,7 @@ def getInfo(session=None, need_fullinfo=False):
 
 					friendlyaddress = server
 					if ipaddress is not None and ipaddress != server:
-						friendlyaddress = server + " (" + ipaddress + ")"
+						friendlyaddress = f"{server} ({ipaddress})"
 					info["shares"].append({
 						"name": name,
 						"method": method,
@@ -495,18 +494,9 @@ def getInfo(session=None, need_fullinfo=False):
 	if session:
 		try:
 			#  gets all current stream clients for images using eStreamServer
-			#  TODO: get tuner info for streams
-			info["streams"] = GetStreamInfo()
-
+			info["streams"] = GetStreamInfo(True)
 			recs = NavigationInstance.instance.getRecordings()
 			if recs:
-				#  only one stream
-				s_name = ""
-				if len(info["streams"]) == 1:
-					sinfo = info["streams"][0]
-					s_name = f"{sinfo['name']} ({sinfo['ip']})"
-					print(f"[OpenWebif] -D- s_name '{s_name}'")
-
 				servicenames = {}
 				for timer in NavigationInstance.instance.RecordTimer.timer_list:
 					if timer.isRunning() and not timer.justplay:
@@ -519,23 +509,29 @@ def getInfo(session=None, need_fullinfo=False):
 								servicenames[tuner_num] += ", " + removeBad(timer.service_ref.getServiceName())
 							else:
 								servicenames[tuner_num] = removeBad(timer.service_ref.getServiceName())
-						print(f"[OpenWebif] -D- timer '{timer.service_ref.getServiceName()}'")
+						# print(f"[OpenWebif] -D- timer '{timer.service_ref.getServiceName()}'")
 
-				print(f"[OpenWebif] -D- recs count '{len(recs)}'")
+				# print(f"[OpenWebif] -D- recs count '{len(recs)}'")
 
 				for rec in recs:
-					feinfo = rec.frontendInfo()
-					frontenddata = feinfo and feinfo.getAll(True)
-					if frontenddata is not None:
-						cur_info = feinfo.getTransponderData(True)
-						if cur_info:
-							nr = frontenddata["tuner_number"]
-							if nr in servicenames:
-								info["tuners"][nr]["rec"] = f"{getOrbitalText(cur_info)} / {servicenames[nr]}"
-							else:
-								info["tuners"][nr]["rec"] = f"{getOrbitalText(cur_info)} / {s_name}"
+					if hasattr(rec, "frontendInfo"):
+						feinfo = rec.frontendInfo()
+						frontenddata = feinfo and feinfo.getAll(True)
+						if frontenddata is not None:
+							cur_info = feinfo.getTransponderData(True)
+							if cur_info:
+								nr = frontenddata["tuner_number"]
+								if nr in servicenames:
+									info["tuners"][nr]["rec"] = f"{getOrbitalText(cur_info)} / {servicenames[nr]}"
 
 			service = session.nav.getCurrentService()
+			for sinfo in info["streams"]:
+				tuner = sinfo.get("tuner_number", -1)
+				if tuner > -1:
+					sname = sinfo.get("name")
+					cur_info = sinfo.get("transponder")
+					info["tuners"][tuner]["stream"] = f"{getOrbitalText(cur_info)} / {sname}"
+
 			if service is not None:
 				sname = service.info().getName()
 				feinfo = service.frontendInfo()
@@ -545,8 +541,9 @@ def getInfo(session=None, need_fullinfo=False):
 					if cur_info:
 						nr = frontenddata["tuner_number"]
 						info["tuners"][nr]["live"] = f"{getOrbitalText(cur_info)} / {sname}"
+
 		except Exception as error:
-			info["EX"] = error
+			info["EX"] = str(error)
 
 	info["timerpipzap"] = False
 	info["allow_duplicate"] = False
@@ -584,29 +581,37 @@ def getStreamServiceAndEvent(ref):
 	return sname, eventname
 
 
-def GetStreamInfo():
+def GetStreamInfo(details=False):
 	streams = []
+	streamInfo = {}
 	nostreamserver = True
 	try:
 		from enigma import eStreamServer
 		streamserver = eStreamServer.getInstance()
 		if streamserver is not None:
 			nostreamserver = False
-			for x in streamserver.getConnectedClients():
-				servicename, eventname = getStreamServiceAndEvent(x[1])
-				if int(x[2]) == 0:
-					strtype = "S"
-				else:
-					strtype = "T"
-				streams.append({
-					"ref": x[1],
+			for index, client in enumerate(streamserver.getConnectedClients()):
+				servicename, eventname = getStreamServiceAndEvent(client[1])
+				streamInfo = {
+					"ref": client[1],
 					"name": servicename,
 					"eventname": eventname,
-					"ip": x[0],  # TODO: ip Address format
-					"type": strtype
-				})
-	except Exception:  # as error:  # nosec # noqa: E722
-#		print("[OpenWebif] -D- no eStreamServer %s" % error)
+					"ip": client[0],  # TODO: ip Address format
+					"type": "S" if int(client[2]) == 0 else "T"
+				}
+				if details:
+					try:
+						clientInfo = streamserver.getConnectedClientDetails(index)
+						tuner_number = clientInfo.get("frontend", {}).get("tuner_number", -1)
+						if tuner_number > -1:
+							streamInfo["tuner_number"] = tuner_number
+							streamInfo["transponder"] = clientInfo.get("transponder")
+					except Exception:  # as derr  # nosec # noqa: E722
+				#		print(f"[OpenWebif] -D- no eStreamServer details {derr}")
+						pass
+				streams.append(streamInfo)
+	except Exception:  # as err:  # nosec # noqa: E722
+#		print(f"[OpenWebif] -D- no eStreamServer {err}")
 		pass
 
 	if nostreamserver:
@@ -642,7 +647,7 @@ def getOrb(pos):
 	if pos > 1800:
 		pos = 3600 - pos
 		direction = _("W")
-	return f"{pos / 10}.{pos % 10}° {direction}"
+	return f"{pos // 10}.{pos % 10}° {direction}"
 
 
 def getFrontendStatus(session):
@@ -658,16 +663,24 @@ def getFrontendStatus(session):
 	inf["inStandby"] = "false" if inStandby is None else "true"
 
 	service = session.nav.getCurrentService()
-	if service is None:
-		return inf
-	feinfo = service.frontendInfo()
-	frontenddata = feinfo and feinfo.getAll(True)
+	frontenddata = None
+	frontendstatus = None
+	if service is not None:
+		feinfo = service.frontendInfo()
+		frontenddata = feinfo and feinfo.getAll(True)
+		frontendstatus = feinfo and feinfo.getFrontendStatus()
+	elif "Satfinder" in session.current_dialog.__class__.__name__:
+		signalfinder = session.current_dialog
+		frontendstatus = {}
+		frontenddata = {}
+		if hasattr(signalfinder, "frontend") and signalfinder.frontend:
+			signalfinder.frontend.getFrontendStatus(frontendstatus)
+			signalfinder.frontend.getFrontendData(frontenddata)
 
 	if frontenddata is not None:
 		inf["tunertype"] = frontenddata.get("tuner_type", "UNKNOWN")
 		inf["tunernumber"] = frontenddata.get("tuner_number")
 
-	frontendstatus = feinfo and feinfo.getFrontendStatus()
 	if frontendstatus is not None:
 		percent = frontendstatus.get("tuner_signal_quality")
 		if percent is not None:
@@ -687,10 +700,9 @@ def getFrontendStatus(session):
 
 
 def getCurrentTime():
-	t = time.localtime()
 	return {
 		"status": True,
-		"time": "%2d:%02d:%02d" % (t.tm_hour, t.tm_min, t.tm_sec)
+		"time": strftime("%H:%M:%S", localtime())
 	}
 
 
@@ -730,9 +742,9 @@ def getStatusInfo(self):
 		end_timestamp = int(curevent[1]) - (config.recording.margin_after.value * 60)
 		statusinfo["currservice_name"] = removeBad(curevent[2])
 		statusinfo["currservice_serviceref"] = serviceref_string
-		statusinfo["currservice_begin"] = time.strftime("%H:%M", (time.localtime(begin_timestamp)))
+		statusinfo["currservice_begin"] = strftime("%H:%M", (localtime(begin_timestamp)))
 		statusinfo["currservice_begin_timestamp"] = begin_timestamp
-		statusinfo["currservice_end"] = time.strftime("%H:%M", (time.localtime(end_timestamp)))
+		statusinfo["currservice_end"] = strftime("%H:%M", (localtime(end_timestamp)))
 		statusinfo["currservice_end_timestamp"] = end_timestamp
 		desc = curevent[3]
 		if len(desc) > 220:
@@ -742,7 +754,7 @@ def getStatusInfo(self):
 		if statusinfo["currservice_serviceref"].startswith("1:0:0"):
 			statusinfo["currservice_filename"] = "/" + "/".join(serviceref_string.split("/")[1:])
 		full_desc = statusinfo["currservice_name"] + "\n"
-		full_desc += statusinfo["currservice_begin"] + " - " + statusinfo["currservice_end"] + "\n\n"
+		full_desc += f'{statusinfo["currservice_begin"]} - {statusinfo["currservice_end"]}\n\n'
 		full_desc += removeBad2(event.getExtendedDescription())
 		statusinfo["currservice_fulldescription"] = full_desc
 		statusinfo["currservice_id"] = curevent[4]
@@ -756,7 +768,7 @@ def getStatusInfo(self):
 			statusinfo["currservice_serviceref"] = serviceref_string
 			if statusinfo["currservice_serviceref"].startswith("1:0:0") or statusinfo["currservice_serviceref"].startswith("4097:0:0"):
 				this_path = "/" + "/".join(serviceref_string.split("/")[1:])
-				if os.path.exists(this_path):
+				if exists(this_path):
 					statusinfo["currservice_filename"] = this_path
 			if servicehandlerinfo:
 				statusinfo["currservice_station"] = currservice_station
@@ -770,13 +782,16 @@ def getStatusInfo(self):
 	statusinfo["inStandby"] = "false" if inStandby is None else "true"
 
 	# Get recording state
-	recs = NavigationInstance.instance.getRecordings()
+	try:
+		recs = NavigationInstance.instance.getAnyRecordingsCount()
+	except:  # nosec # noqa: E722
+		recs = NavigationInstance.instance.getRecordings()
 	if recs:
 		statusinfo["isRecording"] = "true"
 		statusinfo["Recording_list"] = "\n"
 		for timer in NavigationInstance.instance.RecordTimer.timer_list:
 			if timer.state == TimerEntry.StateRunning and not timer.justplay:
-				statusinfo["Recording_list"] += removeBad(timer.service_ref.getServiceName()) + ": " + timer.name + "\n"
+				statusinfo["Recording_list"] += f"{removeBad(timer.service_ref.getServiceName())}: {timer.name}\n"
 		if statusinfo["Recording_list"] == "\n":
 			statusinfo["isRecording"] = "false"
 	else:
@@ -795,8 +810,8 @@ def getStatusInfo(self):
 			i = stream["ip"]
 #			del stream
 			if i is not None:
-				st += i + ": "
-			st += s + " - " + e
+				st += f"{i}: "
+			st += f"{s} - {e}"
 			if st != "":
 				streaming_list.append(st)
 

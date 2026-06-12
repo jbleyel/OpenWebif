@@ -18,21 +18,22 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
 ##########################################################################
 
+from json import loads, JSONDecodeError
 from re import match
 from os.path import isfile
 from Components.config import config as comp_config
 from Screens.InfoBar import InfoBar
 
 from .models.info import getInfo, getCurrentTime, getStatusInfo, getFrontendStatus, testPipStatus
-from .models.services import getCurrentService, getBouquets, getServices, getSubServices, getSatellites, getBouquetEpg, getBouquetNowNextEpg, getMultiChannelNowNextEpg, getSearchEpg, getSimilarEpg, getChannelEpg, getNowNextEpg, getAllServices, getPlayableServices, getPlayableService, getParentalControlList, getEvent, getServiceRef, getPicon
+from .models.services import getCurrentService, getBouquets, getServices, getSubServices, getSatellites, getBouquetEpg, getBouquetNowNextEpg, getMultiChannelNowNextEpg, getSearchEpg, getSimilarEpg, getChannelEpg, getNowNextEpg, getAllServices, getPlayableServices, getPlayableService, getParentalControlList, getEvent, getServiceRef, getPicon, getAllServicesRaw
 from .models.volume import getVolumeStatus, setVolumeUp, setVolumeDown, setVolumeMute, setVolume
 from .models.audiotrack import getAudioTracks, setAudioTrack
 from .models.control import zapService, remoteControl, setPowerState, getStandbyState
 from .models.locations import getLocations, getCurrentLocation, addLocation, removeLocation
 from .models.timers import getTimers, addTimer, addTimerByEventId, editTimer, removeTimer, toggleTimerStatus, cleanupTimer, writeTimerList, recordNow, tvbrowser, getSleepTimer, setSleepTimer, getPowerTimer, setPowerTimer, getVPSChannels
 from .models.message import sendMessage, getMessageAnswer
-from .models.movies import getMovieList, removeMovie, getMovieInfo, movieAction, getAllMovies, getMovieDetails, MOVIETAGFILE
-from .models.config import getSettings, addCollapsedMenu, removeCollapsedMenu, saveConfig, getConfigs, getConfigsSections, getUtcOffset
+from .models.movies import getMovieList, removeMovie, getMovieInfo, movieAction, getAllMovies, getMovieDetails, setMovieResumePoint, MOVIETAGFILE
+from .models.config import cancelConfigBatch, getSettings, addCollapsedMenu, removeCollapsedMenu, saveConfig, saveConfigBatch, getConfigs, getConfigsSections
 from .models.stream import getStream, getTS, getStreamSubservices, GetSession
 from .models.servicelist import reloadServicesLists
 from .models.mediaplayer import mediaPlayerAdd, mediaPlayerRemove, mediaPlayerPlay, mediaPlayerCommand, mediaPlayerCurrent, mediaPlayerList, mediaPlayerLoad, mediaPlayerSave, mediaPlayerFindFile
@@ -72,6 +73,7 @@ class WebController(BaseController):
 		self.putChild(b"stream", StreamController(session))
 
 	def prePageLoad(self, request):
+		request.setHeader("Access-Control-Allow-Origin", "*")
 		request.setHeader("content-type", "text/xml")
 
 	def testMandatoryArguments(self, request, keys):
@@ -456,6 +458,14 @@ class WebController(BaseController):
 		"""
 		return getCurrentLocation()
 
+	def P_allservicescsv(self, request):
+		mode = getUrlArg(request, "mode", "all")
+		return getAllServicesRaw(mode, csv=True)
+
+	def P_allservices(self, request):
+		mode = getUrlArg(request, "mode", "all")
+		return getAllServicesRaw(mode)
+
 	def P_getallservices(self, request):
 		"""
 		Request handler for the `getallservices` endpoint.
@@ -490,8 +500,9 @@ class WebController(BaseController):
 		excludevod = "vod" in excludes
 		excludeiptv = "iptv" in excludes
 		excludelastscanned = "lastscanned" in excludes
+		showstreamrelay = True if getUrlArg(request, "showstreamrelay", "0") in ("1", "true") else False
 
-		bouquets = getAllServices(mode, noiptv=noiptv or excludeiptv, nolastscanned=nolastscanned or excludelastscanned, removenamefromsref=removenamefromsref, showall=showall, showproviders=showproviders, excludeprogram=excludeprogram, excludevod=excludevod)
+		bouquets = getAllServices(mode, noiptv=noiptv or excludeiptv, nolastscanned=nolastscanned or excludelastscanned, removenamefromsref=removenamefromsref, showall=showall, showproviders=showproviders, excludeprogram=excludeprogram, excludevod=excludevod, showstreamrelay=showstreamrelay)
 		if b"renameserviceforxmbc" in list(request.args.keys()):
 			for bouquet in bouquets["services"]:
 				for service in bouquet["subservices"]:
@@ -521,7 +532,10 @@ class WebController(BaseController):
 			showproviders = True
 		picon = True if getUrlArg(request, "picon", "0") in ("1", "true") else False
 		removenamefromsref = True if getUrlArg(request, "removenamefromsref", "0") in ("1", "true") else False
-		return getServices(sref=sref, showall=True, showhidden=hidden, showproviders=showproviders, picon=picon, removenamefromsref=removenamefromsref)
+		showstreamrelay = True if getUrlArg(request, "showstreamrelay", "0") in ("1", "true") else False
+		noiptv = True if getUrlArg(request, "noiptv", "0") in ("1", "true") else False
+		showall = False if getUrlArg(request, "showall", "1") in ("0", "false") else True
+		return getServices(sref=sref, showall=showall, showhidden=hidden, showproviders=showproviders, picon=picon, removenamefromsref=removenamefromsref, noiptv=noiptv, showstreamrelay=showstreamrelay)
 
 	def P_servicesxspf(self, request):
 		"""
@@ -542,7 +556,7 @@ class WebController(BaseController):
 		bouquetname = getUrlArg(request, "bName")
 		if bouquetname:
 			bouquetname = bouquetname.replace(",", "_").replace(";", "_")
-			request.setHeader('Content-Disposition', f'inline; filename={bouquetname}.xspf;')
+			request.setHeader('Content-Disposition', f'attachment; filename={bouquetname}.xspf;')
 		services = getServices(bref, False)
 		if comp_config.OpenWebif.auth_for_streaming.value:
 			session = GetSession()
@@ -577,11 +591,11 @@ class WebController(BaseController):
 			:query string bRef: bouquet reference
 		"""
 		bref = getUrlArg(request, "bRef", "")
-		request.setHeader('Content-Type', 'application/x-mpegurl')
+		request.setHeader('Content-Type', 'application/octet-stream')
 		bouquetname = getUrlArg(request, "bName")
 		if bouquetname:
 			bouquetname = bouquetname.replace(",", "_").replace(";", "_")
-			request.setHeader('Content-Disposition', f'inline; filename={bouquetname}.m3u8;')
+			request.setHeader('Content-Disposition', f'attachment; filename={bouquetname}.m3u8;')
 		services = getServices(bref, False)
 		if comp_config.OpenWebif.auth_for_streaming.value:
 			session = GetSession()
@@ -807,7 +821,7 @@ class WebController(BaseController):
 		Returns:
 			HTTP response with headers
 		"""
-		request.setHeader('Content-Type', 'application/x-mpegurl')
+		request.setHeader('Content-Type', 'application/octet-stream')
 		movielist = getMovieList(request.args)
 		movielist["host"] = f"{whoami(request)['proto']}://{request.getRequestHostname()}:{whoami(request)['port']}"
 		return movielist
@@ -1001,8 +1015,24 @@ class WebController(BaseController):
 				"result": False
 			}
 
-	# a duplicate api ??
-	def P_gettags(self, request):
+	def P_movieresumepoint(self, request):
+		sref = getUrlArg(request, "sRef")
+		if sref is None:
+			sref = getUrlArg(request, "sref")
+
+		try:
+			resumepoint = int(request.args[b"resumepoint"][0]) * 90000  # in seconds
+		except (ValueError, KeyError):  # nosec # noqa: E722
+			resumepoint = None
+
+		if sref and resumepoint:
+			return setMovieResumePoint(sref, resumepoint)
+		else:
+			return {
+				"result": False
+			}
+
+	def P_gettags(self, request):  # a duplicate api ??
 		"""
 		Request handler for the `gettags` endpoint.
 		Get tags of movie file (?).
@@ -1099,6 +1129,7 @@ class WebController(BaseController):
 
 	def _AddEditTimer(self, request, mode):
 
+		returntimer = getUrlArg(request, "returntimer") == "1"
 		disabled = getUrlArg(request, "disabled") == "1"
 		justplay = getUrlArg(request, "justplay") == "1"
 		afterevent = getUrlArg(request, "afterevent", "3")
@@ -1122,6 +1153,9 @@ class WebController(BaseController):
 
 		sref = getUrlArg(request, "sRef")
 
+		# Fix for URLs containing http:// or https://
+		sref = sref.replace("https://", "https%3a//").replace("http://", "http%3a//")
+
 		eit = 0
 		if mode == 1:
 			try:
@@ -1134,9 +1168,10 @@ class WebController(BaseController):
 		elif b"eit" in list(request.args.keys()) and isinstance(request.args[b"eit"][0], int):
 			eit = int(request.args[b"eit"][0])
 		else:
-			querytime = int(request.args[b"begin"][0]) + (int(request.args[b"end"][0]) - int(request.args[b"begin"][0])) // 2
+			# This might need further investigation. Do not get exactly the middle, take 20% so we usually expect to get first event.
+			queryTime = int(request.args[b"begin"][0]) + (int(request.args[b"end"][0]) - int(request.args[b"begin"][0])) // 5
 			epg = EPG()
-			eventid = epg.getEventIdByTime(sref, querytime)
+			eventid = epg.getEventIdByTime(sref, queryTime)
 			if eventid is not None:
 				eit = int(eventid)
 
@@ -1172,7 +1207,8 @@ class WebController(BaseController):
 				recordingtype,
 				marginBefore,
 				marginAfter,
-				hasEndTime
+				hasEndTime,
+				returntimer
 			)
 		elif mode == 2:
 			try:
@@ -1213,7 +1249,8 @@ class WebController(BaseController):
 				allow_duplicate,
 				marginBefore,
 				marginAfter,
-				hasEndTime
+				hasEndTime,
+				returntimer
 			)
 		else:
 			return addTimer(
@@ -1238,7 +1275,8 @@ class WebController(BaseController):
 				allow_duplicate,
 				marginBefore,
 				marginAfter,
-				hasEndTime
+				hasEndTime,
+				returntimer
 			)
 
 	def P_timeradd(self, request):
@@ -1575,7 +1613,6 @@ class WebController(BaseController):
 		bref = getUrlArg(request, "bRef")
 		ret["services"] = getServices(bref, True, False)["services"]
 		ret["lang"] = getUrlArg(request, "lang")
-		ret["offset"] = getUtcOffset()
 		return ret
 
 	# http://enigma2/api/epgnow?bRef=1%3A7%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A0%3A%20FROM%20BOUQUET%20"userbouquet.favourites.tv"%20ORDER%20BY%20bouquet
@@ -1599,7 +1636,8 @@ class WebController(BaseController):
 			return res
 		bref = getUrlArg(request, "bRef")
 		showisplayable = getUrlArg(request, "showIsPlayable") is not None
-		ret = getBouquetNowNextEpg(bref, nowornext, self.isJson, showisplayable)
+		showstreamrelay = True if getUrlArg(request, "showstreamrelay", "0") in ("1", "true") else False
+		ret = getBouquetNowNextEpg(bref, nowornext, self.isJson, showisplayable=showisplayable, showstreamrelay=showstreamrelay)
 		if nowornext == EPG.NOW_NEXT:
 			info = getCurrentService(self.session)
 			ret["info"] = info
@@ -1719,8 +1757,20 @@ class WebController(BaseController):
 			return res
 		return getNowNextEpg(getUrlArg(request, "sRef"), EPG.NEXT, self.isJson)
 
+	def P_epgservicenownext(self, request):
+		res = self.testMandatoryArguments(request, ["sRef"])
+		if res:
+			return res
+
+		eventnow = getNowNextEpg(getUrlArg(request, "sRef"), EPG.NOW, self.isJson)
+		eventnext = getNowNextEpg(getUrlArg(request, "sRef"), EPG.NEXT, self.isJson)
+		eventnow = eventnow["events"][0] if eventnow["events"] else {}
+		eventnext = eventnext["events"][0] if eventnext["events"] else {}
+		return {"events": [eventnow, eventnext]}
+
 	# http://enigma2/api/epgsimilar?sRef=1%3A0%3A19%3A1B1F%3A802%3A2%3A11A0000%3A0%3A0%3A0%3A&eventid=32645
 	# http://enigma2/web/epgsimilar?sRef=1%3A0%3A19%3A1B1F%3A802%3A2%3A11A0000%3A0%3A0%3A0%3A&eventid=32645
+
 	def P_epgsimilar(self, request):
 		res = self.testMandatoryArguments(request, ["sRef", "eventid"])
 		if res:
@@ -2018,6 +2068,17 @@ class WebController(BaseController):
 		"""
 		return tvbrowser(self.session, request)
 
+	def _saveConfig(self, request, save=False):
+		if request.method == b'POST':
+			res = self.testMandatoryArguments(request, ["key"])
+			if res:
+				return res
+			value = getUrlArg(request, "value")
+			if value:
+				key = getUrlArg(request, "key")
+				return saveConfig(key, value, save)
+		return {"result": False}
+
 	def P_saveconfig(self, request):
 		"""
 		Request handler for the `saveconfig` endpoint.
@@ -2036,15 +2097,103 @@ class WebController(BaseController):
 			:query string key: configuration key
 			:query string value: configuration value
 		"""
+		return self._saveConfig(request, True)
+
+	def P_updateconfig(self, request):
+		"""
+		Request handler for the `updateconfig` endpoint.
+
+		.. note::
+
+			Not available in *Enigma2 WebInterface API*.
+
+		Args:
+			request (twisted.web.server.Request): HTTP request object
+		Returns:
+			HTTP response with headers
+
+		.. http:post:: /web/updateconfig
+
+			:query string key: configuration key
+			:query string value: configuration value
+		"""
+		return self._saveConfig(request, False)
+
+	def P_cancelconfigbatch(self, request):
+		"""
+		Request handler for the `cancelconfigbatch` endpoint.
+		Cancels a batch configuration save operation.
+
+		.. note::
+
+			Not available in *Enigma2 WebInterface API*.
+
+		Args:
+			request (twisted.web.server.Request): HTTP request object
+		Returns:
+			HTTP response with batch save result
+
+		.. http:post:: /web/cancelconfigbatch
+
+			:query string configs: JSON string with configuration key-value pairs
+			Example: {"config.usage.setup_level": "1", "config.misc.useHDMICEC": "true"}
+		"""
+
+		message = "Invalid request method"
 		if request.method == b'POST':
-			res = self.testMandatoryArguments(request, ["key"])
-			if res:
-				return res
-			value = getUrlArg(request, "value")
-			if value:
-				key = getUrlArg(request, "key")
-				return saveConfig(key, value)
-		return {"result": False}
+			try:
+				keys_json = getUrlArg(request, "keys", "")
+				section = getUrlArg(request, "section", "")
+				if keys_json:
+					try:
+						keys = loads(keys_json)
+						return cancelConfigBatch(keys, section)
+					except JSONDecodeError:
+						message = "Invalid JSON format"
+				else:
+					message = "No keys provided"
+			except Exception as e:
+				print(f"[OpenWebif] P_cancelconfigbatch Error: {e}")
+				message = "Error processing batch config cancel"
+		return {"result": False, "message": message}
+
+	def P_saveconfigbatch(self, request):
+		"""
+		Request handler for the `saveconfigbatch` endpoint.
+		Saves multiple configuration values in a single batch operation.
+
+		.. note::
+
+			Not available in *Enigma2 WebInterface API*.
+
+		Args:
+			request (twisted.web.server.Request): HTTP request object
+		Returns:
+			HTTP response with batch save result
+
+		.. http:post:: /web/saveconfigbatch
+
+			:query string configs: JSON string with configuration key-value pairs
+			Example: {"config.usage.setup_level": "1", "config.misc.useHDMICEC": "true"}
+		"""
+
+		message = "Invalid request method"
+		if request.method == b'POST':
+			try:
+				keys_json = getUrlArg(request, "keys", "")
+				section = getUrlArg(request, "section", "")
+				if keys_json:
+					try:
+						keys = loads(keys_json)
+						return saveConfigBatch(keys, section)
+					except JSONDecodeError:
+						message = "Invalid JSON format"
+				else:
+					message = "No keys provided"
+			except Exception as e:
+				print(f"[OpenWebif] P_saveconfigbatch Error: {e}")
+				message = "Error processing batch config save"
+		return {"result": False, "message": message}
 
 	def P_mediaplayeradd(self, request):
 		res = self.testMandatoryArguments(request, ["file"])
@@ -2278,7 +2427,8 @@ class WebController(BaseController):
 
 		return {
 			"result": True,
-			"message": "EPG data saved"
+			"message": "EPG data saved",
+			"path": comp_config.misc.epgcache_filename.value
 		}
 
 	def P_loadepg(self, request):
@@ -2409,7 +2559,7 @@ class WebController(BaseController):
 		args = list(request.args.keys())
 		for arg in args:
 			sarg = toString(arg)
-			if sarg in ("minmovielist", "mintimerlist", "minepglist", "rcu_full_view", "epgsearch_full", "epgsearch_only_bq", "nownext_columns", "responsive_enabled", "showpicons", "showchanneldetails", "showiptvchannelsinselection", "screenshotchannelname", "showallpackages", "showepghistory", "zapstream", "screenshot_high_resolution", "screenshot_refresh_auto"):
+			if sarg in ("minmovielist", "mintimerlist", "minepglist", "rcu_full_view", "epgsearch_full", "epgsearch_only_bq", "nownext_columns", "responsive_enabled", "showpicons", "showchanneldetails", "showiptvchannelsinselection", "screenshotchannelname", "showallpackages", "showepghistory", "compacttimerlist", "compactepglist", "zapstream", "screenshot_high_resolution", "screenshot_refresh_auto"):
 				val = request.args[arg][0] in (b"true", b"1")
 				configitem = getattr(comp_config.OpenWebif.webcache, sarg)
 				configitem.value = val
@@ -2515,4 +2665,5 @@ class ApiController(WebController):
 		WebController.__init__(self, session, path)
 
 	def prePageLoad(self, request):
+		request.setHeader("Access-Control-Allow-Origin", "*")
 		self.isJson = True

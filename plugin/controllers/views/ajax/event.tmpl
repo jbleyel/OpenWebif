@@ -3,7 +3,7 @@
 #set $etime = time.localtime($event.begin)
 #set $channel = $event.channel.replace("'", r"\'")
 #set $title = $event.title.replace("'", r"\'")
-#set $sref=quote($event.sref, safe=' ~@#$&()*!+=:;,.?/\'')
+#set $sref=quote($event.sref, safe=' ~@#$()*!+=:;,.?/\'')
 #from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
 
 <style>
@@ -46,12 +46,19 @@
 		</td>
 		</tr>
 		<tr>
-			#if $transcoding
-			<td><a href="#" onclick="jumper8001('$sref', '$channel');" title="$tstrings['stream']: $channel"><i class="fa fa-desktop" style="font-size:22px;"></i></a></td>
-			<td><a href="#" onclick="jumper8002('$sref', '$channel');" title="$tstrings['stream'] ($tstrings['transcoded']): $channel"><i class="fa fa-mobile" style="font-size:26px;margin-top:-3px;"></i></a></td>
+			#if $event.link != ""
+				#if $event.link != "NoStream"
+					<td><a target="_blank" href='$event.link' title="$tstrings['stream'] $channel"><i class="fa fa-desktop" style="font-size:22px;"></i></a></td>
+					<td></td>
+				#end if
 			#else
-			<td><a target="_blank" href='../web/stream.m3u?ref=$sref&name=$channel' title="$tstrings['stream'] $channel"><i class="fa fa-desktop" style="font-size:22px;"></i></a></td>
-			<td></td>
+				#if $transcoding
+				<td><a href="#" onclick="jumper8001('$sref', '$channel');" title="$tstrings['stream']: $channel"><i class="fa fa-desktop" style="font-size:22px;"></i></a></td>
+				<td><a href="#" onclick="jumper8002('$sref', '$channel');" title="$tstrings['stream'] ($tstrings['transcoded']): $channel"><i class="fa fa-mobile" style="font-size:26px;margin-top:-3px;"></i></a></td>
+				#else
+				<td><a target="_blank" href='../web/stream.m3u?ref=$sref&name=$channel' title="$tstrings['stream'] $channel"><i class="fa fa-desktop" style="font-size:22px;"></i></a></td>
+				<td></td>
+				#end if
 			#end if
 		</tr>
 		<tr>

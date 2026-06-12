@@ -2,7 +2,7 @@
 
 from time import localtime, strftime
 from urllib.parse import quote
-from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
+# from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
 
 
 class renderEvtBlock:
@@ -40,7 +40,7 @@ class renderEvtBlock:
 		else:
 			shortdesc = ''
 
-		sref = quote(event['ref'], safe=' ~@#$&()*!+=:;,.?/\'')
+		sref = quote(event['ref'], safe=' ~@#$()*!+=:;,.?/\'')
 
 		return self.template % (
 			event['id'],

@@ -1,7 +1,7 @@
 ##########################################################################
 # OpenWebif: AjaxController
 ##########################################################################
-# Copyright (C) 2011 - 2022 E2OpenPlugins
+# Copyright (C) 2011 - 2026 E2OpenPlugins
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
 ##########################################################################
 
+from os import listdir
 from os.path import exists, isdir
 from time import mktime, localtime
 
@@ -158,7 +159,7 @@ class AjaxController(BaseController):
 		moviedb = config.OpenWebif.webcache.moviedb.value if config.OpenWebif.webcache.moviedb.value else EXT_EVENT_INFO_SOURCE
 		exteventinfoprovider = getEventInfoProvider(moviedb)
 
-		return {"theme": theme, "events": events, "timers": timers, "at": at, "moviedb": moviedb, "extEventInfoProvider": exteventinfoprovider}
+		return {"theme": theme, "events": events, "timers": timers, "at": at, "moviedb": moviedb, "extEventInfoProvider": exteventinfoprovider, "compactepglist": config.OpenWebif.webcache.compactepglist.value}
 
 	# http://enigma2/ajax/epgdialog?sstr=test&bouquetsonly=1
 	def P_epgdialog(self, request):
@@ -217,25 +218,21 @@ class AjaxController(BaseController):
 		return movies
 
 	def P_timers(self, request):
-
 		timers = getTimers(self.session)
-		unsort = timers['timers']
-
 		sorttype = getUrlArg(request, "sort")
-		if sorttype is None:
-			return timers
-
-		if sorttype == 'name':
-			timers['timers'] = sorted(unsort, key=lambda k: k['name'])
-		elif sorttype == 'named':
-			timers['timers'] = sorted(unsort, key=lambda k: k['name'], reverse=True)
-		elif sorttype == 'date':
-			timers['timers'] = sorted(unsort, key=lambda k: k['begin'])
-		else:
-			timers['timers'] = sorted(unsort, key=lambda k: k['begin'], reverse=True)
-			sorttype = 'dated'
-
-		timers['sort'] = sorttype
+		if sorttype is not None:
+			unsort = timers['timers']
+			if sorttype == 'name':
+				timers['timers'] = sorted(unsort, key=lambda k: k['name'])
+			elif sorttype == 'named':
+				timers['timers'] = sorted(unsort, key=lambda k: k['name'], reverse=True)
+			elif sorttype == 'date':
+				timers['timers'] = sorted(unsort, key=lambda k: k['begin'])
+			else:
+				timers['timers'] = sorted(unsort, key=lambda k: k['begin'], reverse=True)
+				sorttype = 'dated'
+			timers['sort'] = sorttype
+		timers['compacttimerlist'] = config.OpenWebif.webcache.compacttimerlist.value
 		return timers
 
 	# http://enigma2/ajax/tvradio
@@ -277,6 +274,8 @@ class AjaxController(BaseController):
 		ret['screenshotchannelname'] = config.OpenWebif.webcache.screenshotchannelname.value
 		ret['showallpackages'] = config.OpenWebif.webcache.showallpackages.value
 		ret['showepghistory'] = config.OpenWebif.webcache.showepghistory.value
+		ret['compacttimerlist'] = config.OpenWebif.webcache.compacttimerlist.value
+		ret['compactepglist'] = config.OpenWebif.webcache.compactepglist.value
 		ret['allowipkupload'] = config.OpenWebif.allow_upload_ipk.value
 		ret['smallremotes'] = [(x, _('%s Style') % x.capitalize()) for x in config.OpenWebif.webcache.smallremote.choices]
 		ret['smallremote'] = config.OpenWebif.webcache.smallremote.value
@@ -408,3 +407,14 @@ class AjaxController(BaseController):
 			'radioChannels': getAllServices(RADIO),
 		}
 		return {'data': ret}
+
+	def P_scripts(self, request):
+		scripts = []
+		try:
+			for file in listdir('/usr/script'):
+				if file.endswith('.sh') and not file.startswith('.'):
+					scripts.append(file)
+		except OSError as exc:
+			print(f"Error accessing /usr/script: {exc}")
+
+		return {'scripts': scripts}

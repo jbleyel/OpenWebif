@@ -24,7 +24,7 @@ from enigma import eServiceCenter, eServiceReference
 from Components.config import config
 from Components.ParentalControl import parentalControl
 from .utilities import getUrlArg, toBinary, toString, e2simplexmlresult
-from .defaults import service_types_tv
+from .defaults import service_types_tv, LCNSUPPORT
 from .models.services import getPicon
 from .BouquetEditor import BouquetEditor
 from .base import BaseController
@@ -180,19 +180,24 @@ class BQEWebController(BaseController):
 		includepicon = (getUrlArg(request, "picon", "") == '1')
 		services = []
 
+		lcn = LCNSUPPORT and config.usage.numberMode.value == 2
 		calcpos = False
 
 		if sref == "":
 			sref = f'{service_types_tv} FROM BOUQUET "bouquets.tv" ORDER BY bouquet'
 			calcpos = True
+			lcn = False
 		elif ' "bouquets.radio" ' in sref:
 			calcpos = True
 		elif ' "bouquets.tv" ' in sref:
 			calcpos = True
 
+		if lcn:
+			calcpos = False
+
 		servicehandler = eServiceCenter.getInstance()
 		serviceslist = servicehandler.list(eServiceReference(sref))
-		fulllist = serviceslist and serviceslist.getContent("RN", True)
+		fulllist = serviceslist and serviceslist.getContent("RNL" if lcn else "RN", True)
 
 		pos = 0
 		opos = 0
@@ -205,20 +210,20 @@ class BQEWebController(BaseController):
 				for sitem in sfulllist:
 					sref = sitem[0].toString()
 					hs = (int(sref.split(":")[1]) & 512)
-					sp = (sref[:7] == '1:832:D')
+					sp = sitem[0].flags & eServiceReference.isNumberedMarker
 					if not hs or sp:  # 512 is hidden service on sifteam image. Doesn't affect other images
 						opos = opos + 1
 						if not sp and sitem[0].flags & eServiceReference.isMarker:
 							opos = opos - 1
 			sref = item[0].toString()
 			hs = (int(sref.split(":")[1]) & 512)
-			sp = (sref[:7] == '1:832:D')
+			sp = item[0].flags & eServiceReference.isNumberedMarker
 			if not hs or sp:  # 512 is hidden service on sifteam image. Doesn't affect other images
 				pos = pos + 1
 				service = {}
 				if calcpos:
 					service['startpos'] = oldopos
-				service['pos'] = pos
+				service['pos'] = item[2] if lcn else pos
 				service['servicereference'] = sref
 				service['isgroup'] = '0'
 				service['ismarker'] = '0'

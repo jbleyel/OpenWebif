@@ -1,7 +1,7 @@
 ##########################################################################
 # OpenWebif: config
 ##########################################################################
-# Copyright (C) 2011 - 2023 E2OpenPlugins
+# Copyright (C) 2011 - 2025 E2OpenPlugins, jbleyel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
 ##########################################################################
 
-from datetime import datetime
+from datetime import datetime, timezone
 from gettext import dgettext
 from os import listdir
 from os.path import exists, dirname, basename, join
@@ -27,7 +27,13 @@ from xml.etree.ElementTree import parse
 
 from enigma import eEnv
 from Components.SystemInfo import BoxInfo, SystemInfo
-from Components.config import config
+from Components.config import config, ConfigBoolean
+
+try:
+	from Components.config import setupOnSave  # Get setupOnSave if available otherwise fallback to empty dict
+except ImportError:
+	setupOnSave = {}
+
 
 from ..i18n import _
 from ..utilities import get_config_attribute
@@ -94,7 +100,7 @@ def getBoxName():
 
 
 def getJsonFromConfig(cnf):
-	if cnf.__class__.__name__ == "ConfigSelection" or cnf.__class__.__name__ == "ConfigSelectionNumber" or cnf.__class__.__name__ == "TconfigSelection":
+	if cnf.__class__.__name__ in ("ConfigSelectionInteger", "ConfigSelectionNumber", "ConfigSelection"):
 		if isinstance(cnf.choices.choices, dict):
 			choices = []
 			for choice in cnf.choices.choices:
@@ -118,7 +124,7 @@ def getJsonFromConfig(cnf):
 			"choices": choices,
 			"current": str(cnf.value)
 		}
-	elif cnf.__class__.__name__ == "ConfigBoolean" or cnf.__class__.__name__ == "ConfigEnableDisable" or cnf.__class__.__name__ == "ConfigYesNo":
+	elif isinstance(cnf, ConfigBoolean):
 		return {
 			"result": True,
 			"type": "checkbox",
@@ -138,7 +144,7 @@ def getJsonFromConfig(cnf):
 			"type": "number",
 			"current": cnf.value
 		}
-	elif cnf.__class__.__name__ == "ConfigInteger" or cnf.__class__.__name__ == "TconfigInteger":
+	elif cnf.__class__.__name__ == "ConfigInteger":
 		return {
 			"result": True,
 			"type": "number",
@@ -170,9 +176,11 @@ def getJsonFromConfig(cnf):
 	}
 
 
-def saveConfig(path, value):
+def saveConfig(path, value, save):
+	oldValue = None
 	try:
 		cnf = get_config_attribute(path, root_obj=config)
+		oldValue = cnf.value
 	except Exception as exc:
 		print(f"[OpenWebif] saveConfig Error : {exc}")
 		return {
@@ -212,7 +220,8 @@ def saveConfig(path, value):
 			cnf.value = cnf_value
 		else:
 			cnf.value = value
-		cnf.save()
+		if save:
+			cnf.save()
 		configfiles.reload()
 	except Exception as e:
 		print(f"[OpenWebif] saveConfig Error : {e}")
@@ -221,7 +230,95 @@ def saveConfig(path, value):
 		}
 
 	return {
-		"result": True
+		"result": True,
+		"value": cnf.value,
+		"oldValue": oldValue,
+		"saved": cnf.saved_value
+	}
+
+
+def cancelConfigBatch(keys, section):
+	if not keys or not isinstance(keys, list):
+		return {
+			"result": False,
+			"message": "Invalid keys format"
+		}
+
+	errors = []
+	successful = 0
+
+	for path in keys:
+		try:
+			cnf = get_config_attribute(path, root_obj=config)
+		except Exception as exc:
+			print(f"[OpenWebif] cancelConfigBatch Error for {path}: {exc}")
+			errors.append(f"Config '{path}' not found")
+			continue
+
+		print(f"[OpenWebif] cancelConfigBatch canceling {path}")
+		print(f"[OpenWebif] cancelConfigBatch current value of {path} is {cnf.value}")
+
+		try:
+			cnf.cancel()
+			successful += 1
+		except Exception as e:
+			print(f"[OpenWebif] cancelConfigBatch Error for {path}: {e}")
+			errors.append(f"Error canceling '{path}': {str(e)}")
+
+		print(f"[OpenWebif] cancelConfigBatch new value of {path} is {cnf.value}")
+
+	try:
+		configfiles.reloadSection(section)
+	except Exception as e:
+		print(f"[OpenWebif] cancelConfigBatch reload error: {e}")
+		return {"result": False, "message": str(e)}
+	return {"result": True}
+
+
+def saveConfigBatch(keys, section):
+	if not keys or not isinstance(keys, list):
+		return {
+			"result": False,
+			"message": "Invalid keys format"
+		}
+
+	errors = []
+	successful = 0
+
+	for path in keys:
+		try:
+			cnf = get_config_attribute(path, root_obj=config)
+		except Exception as exc:
+			print(f"[OpenWebif] saveConfigBatch Error for {path}: {exc}")
+			errors.append(f"Config '{path}' not found")
+			continue
+
+		try:
+			cnf.save()
+			successful += 1
+		except Exception as e:
+			print(f"[OpenWebif] saveConfigBatch Error for {path}: {e}")
+			errors.append(f"Error saving '{path}': {str(e)}")
+
+	try:
+		configfiles.reloadSection(section)
+	except Exception as e:
+		print(f"[OpenWebif] saveConfigBatch reload error: {e}")
+		errors.append("Error reloading configuration")
+
+	if section in setupOnSave:
+		try:
+			callback = setupOnSave.get(section)
+			if callback and callable(callback):
+				callback()
+		except Exception as e:
+			print(f"[OpenWebif] saveConfigBatch callback error for section '{section}': {e}")
+
+	return {
+		"result": successful > 0 and len(errors) == 0,
+		"successful": successful,
+		"total": len(keys),
+		"errors": errors if errors else []
 	}
 
 
@@ -301,6 +398,16 @@ def getSettings():
 					configkeyval.append((f"{name}", cnf.default))
 			except AttributeError:
 				pass
+
+	try:
+		streamRelay = []
+		with open("/etc/enigma2/whitelist_streamrelay") as fd:
+			streamRelay = [line.strip() for line in fd.readlines()]
+		if streamRelay:
+			configkeyval.append(("whitelist_streamrelay", ",".join(streamRelay)))
+	except OSError:
+		pass
+
 	return {
 		"result": True,
 		"settings": configkeyval
@@ -308,15 +415,9 @@ def getSettings():
 
 
 def getUtcOffset():
-	now = time()
-	offset = (datetime.fromtimestamp(now) - datetime.utcfromtimestamp(now)).total_seconds()
-	hours = round(offset / 3600)
-	minutes = (offset - (hours * 3600))
-	return {
-		"result": True,
-		# round minutes to next quarter hour
-		"utcoffset": f"{int(hours * 100 + round(minutes / 900) * 900 / 60):+05}"
-	}
+    offset = datetime.fromtimestamp(time(), tz=timezone.utc).astimezone().utcoffset().total_seconds()
+    hours, minutes = divmod(round(offset / 900) * 900, 3600)
+    return {"result": True, "utcoffset": f"{int(hours):+03}{int(minutes / 60):02}"}
 
 
 class ConfigFiles:
@@ -332,6 +433,37 @@ class ConfigFiles:
 		self.section_config = {}
 		self.sections = []
 		self.parseConfigFiles()
+
+	def reloadSection(self, key):
+		self.section_config.pop(key, None)
+		self.sections = [s for s in self.sections if s["key"] != key]
+		for setupfileName, pluginLanguageDomain in self.setupfiles:
+			if not exists(setupfileName):
+				continue
+			setupfile = open(setupfileName)
+			setupdom = parse(setupfile)  # nosec
+			setupfile.close()
+			for section in setupdom.getroot().findall("setup"):
+				if section.get("key") != key:
+					continue
+				requires = section.get("requires")
+				if requires and not BoxInfo.getItem(requires, False):
+					break
+				self.itemstoadd = []
+				self.addItems(section)
+				configs = list(self.itemstoadd)
+				if configs:
+					title = section.get("title", "") or ""
+					allowDefault = section.get("allowDefault", "0").lower() in ("1", "enabled", "on", "true", "yes")
+					if pluginLanguageDomain:
+						newtitle = dgettext(pluginLanguageDomain, title)
+						title = newtitle if newtitle != title else _(title)
+					else:
+						title = _(title)
+					self.section_config[key] = (title, configs, pluginLanguageDomain)
+					self.sections.append({"key": key, "description": title, "allowDefault": allowDefault})
+					self.sections = sorted(self.sections, key=lambda s: s["description"])
+				break
 
 	def getConfigFiles(self):
 		setupfiles = [eEnv.resolve('${datadir}/enigma2/setup.xml')]
@@ -426,6 +558,7 @@ class ConfigFiles:
 
 				if configs:
 					title = section.get("title")
+					allowDefault = section.get("allowDefault", "0").lower() in ("1", "enabled", "on", "true", "yes")
 
 					if pluginLanguageDomain:
 						newtitle = dgettext(pluginLanguageDomain, title)
@@ -437,7 +570,8 @@ class ConfigFiles:
 
 					sections.append({
 						"key": key,
-						"description": title
+						"description": title,
+						"allowDefault": allowDefault
 					})
 					#title = _(section.get("title", ""))
 					if title is None:

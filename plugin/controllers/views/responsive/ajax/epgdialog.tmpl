@@ -29,7 +29,7 @@
 
 		#set $channel = $event.sname.replace("'", r"\'")
 		#set $title = $event.title.replace("'", r"\'")
-		#set $sref=quote($event.sref, safe=' ~@#$&()*!+=:;,.?/\'')
+		#set $sref=quote($event.sref, safe=' ~@#$()*!+=:;,.?/\'')
 
 #if $isSettingEnabled('minepglist') == 'checked'
 

@@ -252,6 +252,9 @@ function initJsTranslation(strings) {
 	tstr_begin = strings.end;
 	tstr_rename_recording = strings.rename_recording;
 
+	tstr_save = strings.save;
+	tstr_saving = strings.saving;
+
 }
 
 function wait_for_openwebif() {
@@ -579,6 +582,8 @@ function addTimerEventPlay(sRef, eventId) {
 */
 
 function addEditTimerEvent(sRef, eventId) {
+	console.debug("addEditTimerEvent")
+
 	let url="/api/event?sRef=" + sRef + "&idev=" + eventId;
 	$.ajax({
 		url: url,
@@ -1014,16 +1019,80 @@ function toggleFullRemote() {
 	$("#remotecontainer").toggle();
 }
 
+function reloadConfigSection(section) {
+	var url = 'ajax/config?section=' + section;
+	if (typeof load_scontent === 'function') {
+		load_scontent(url);
+	} else {
+		$('#scontent').load(url);
+	}
+}
+
+function updateConfig(key, value, section) {
+	$.ajax({ url: "/api/updateconfig?key=" + escape(key) + "&value=" + escape(value), cache: false, async: true, type: "POST"}).done(function() { 
+		if (key == "config.usage.setup_level") {
+			$("#content_container").load(lastcontenturl);
+		}
+		else {
+			reloadConfigSection(section);
+		}
+	});
+}
+
 function saveConfig(key, value, section) {
 	$.ajax({ url: "/api/saveconfig?key=" + escape(key) + "&value=" + escape(value), cache: false, async: true, type: "POST"}).done(function() { 
 		if (key == "config.usage.setup_level") {
 			$("#content_container").load(lastcontenturl);
 		}
 		else {
-			load_scontent('ajax/config?section=' + section);
+			reloadConfigSection(section);
 		}
 	});
 }
+
+function batchConfig(section, save) {
+	var keys = [];
+
+	$('#configuration').find('[id][data-config-type]').each(function() {
+		var elemId = $(this).attr('id');
+		if (elemId && keys.indexOf(elemId) === -1) {
+			keys.push(elemId);
+		}
+	});
+
+	if (!keys.length) {
+		return;
+	}
+
+	var $btn = save ? $('#btn_save') : $('#btn_cancel');
+	$btn.prop('disabled', true).text(tstr_saving);
+
+	$.ajax({
+		url: save ? '/api/saveconfigbatch' : '/api/cancelconfigbatch',
+		cache: false,
+		async: true,
+		type: 'POST',
+		data: {
+			keys: JSON.stringify(keys),
+			section: section
+		},
+		dataType: 'json'
+	}).done(function(response) {
+		$btn.prop('disabled', false).text(save ? tstr_save : tstr_cancel);
+		if (response.result) {
+			reloadConfigSection(section);
+		} else {
+			alert(response.message || 'Error saving configuration');
+		}
+	}).fail(function(jqXHR, textStatus) {
+		$btn.prop('disabled', false).text(save ? tstr_save : tstr_cancel);
+		alert('Error communicating with server: ' + textStatus);
+	});
+}
+
+function cancelAllConfig(section) { batchConfig(section, false); }
+function saveAllConfig(section) { batchConfig(section, true); }
+
 
 function numberTextboxKeydownFilter(event) {
 	if (event.keyCode == 46 || event.keyCode == 8 || event.keyCode == 9) {
@@ -1365,6 +1434,8 @@ function unEscape(htmlStr) {
 }
 
 function addTimer(evt,chsref,chname,top,isradio) {
+	console.debug("addTimer")
+	console.debug(evt, chsref, chname, top, isradio);
 	current_serviceref = '';
 	current_begin = -1;
 	current_end = -1;
@@ -1405,6 +1476,7 @@ function addTimer(evt,chsref,chname,top,isradio) {
 		serviceref = chsref;
 		title = chname;
 		if ($('#bouquet_select').val(chsref) === 'undefined') {
+			console.debug("add missing serviceref to select: " + chsref + " - " + chname);
 			$('#bouquet_select').append($("<option></option>").attr("value", serviceref).text(chname));
 		}
 	}
@@ -1430,6 +1502,7 @@ function addTimer(evt,chsref,chname,top,isradio) {
 	let enddate = end !== -1 ? new Date( (Math.round(end) + margin_after*60) * 1000) : new Date(begindate.getTime() + (60*60*1000));
 	$('#timerend').datetimepicker('setDate', enddate);
 
+	console.debug(serviceref)
 	$('#bouquet_select').val(serviceref);
 	$('#bouquet_select').trigger("chosen:updated");
 	

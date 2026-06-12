@@ -34,7 +34,7 @@
 	<title>$boxname - OpenWebif</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=0.86, maximum-scale=3.0, minimum-scale=0.86"><!-- https://developer.mozilla.org/en-US/docs/Mozilla/Mobile/Viewport_meta_tag -->
+	<meta name="viewport" content="width=device-width, initial-scale=1" /><!-- https://developer.mozilla.org/en-US/docs/Web/HTML/Viewport_meta_tag -->
 	<meta name="description" content="">
 	<meta name="author" content="">
 	#if $MOBILEDEVICE == True
@@ -390,11 +390,7 @@
 								#set $target_url = $extra["key"];
 								#if $target_url not in ('ajax/at','ajax/bqe','ajax/settings')
 									#if 'nw' in $extra
-										#if $extra["nw"] == "1"
 										<li><a href="$target_url" target='_blank'>$extra["description"]</a></li>
-										#else
-										<li><a href="$target_url" class="lmc pop">$extra["description"]</a></li>
-										#end if
 									#else
 										<li><a href='javascript:void(0);' data-close="true" onclick="load_maincontent('$target_url'); return false;" >$extra["description"]</a></li>
 									#end if
@@ -610,14 +606,14 @@
 									<a href="https://github.com/E2OpenPlugins" target="_blank" class="link--skinned" rel="noreferrer noopener">E2OpenPlugins</a> |
 									<a href="https://www.opena.tv" target="_blank" class="link--skinned" rel="noreferrer noopener">openATV</a> |
 									<a href="https://board.openbh.net" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenBh</a> |
-									<a href="http://www.droidsat.org" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenDroid</a> |
 									<a href="https://www.egami-image.com" target="_blank" class="link--skinned" rel="noreferrer noopener">EGAMI</a> |
 									<a href="https://www.hdfreaks.cc" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenHDF</a> |
 									<a href="https://images.teamblue.tech" target="_blank" class="link--skinned" rel="noreferrer noopener">teamBlue</a> |
-									<a href="https://openpli.org" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenPli</a> |
+									<a href="https://openpli.org" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenPLi</a> |
 									<a href="https://blackhole-community.com/board" target="_blank" class="link--skinned" rel="noreferrer noopener">Black Hole</a> |
 									<a href="https://openspa.info" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenSpa</a> |
 									<a href="https://www.openvix.co.uk" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenViX</a> |
+									<a href="https://droidsat.org" target="_blank" class="link--skinned" rel="noreferrer noopener">OpenDroid</a> |
 									<a href="#about" class="link--skinned" rel="noreferrer noopener">$tstrings['about']</a>
 								</div>
 							</div>
@@ -793,7 +789,16 @@
 						</button>
 					</div>
 				</div>
-				<div class="row clearfix">
+				<hr/>
+				<div class="row clearfix m-t-20">
+					<div class="col-xs-12">
+						<div id="multiBoot_container_responsive" style="display: none;">
+							<div style="font-weight: bold; margin-bottom: 10px; font-size: 14px;"><i class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 5px;">sync</i>MultiBoot Slots:</div>
+							<div id="multiBoot_list_responsive" class="row clearfix">
+								<div class="col-xs-12" style="text-align: center;">$tstrings['loading1']</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 			<div class="modal-footer">
@@ -913,8 +918,69 @@
 <script>initJsTranslationAddon($dumps($tstrings))</script>
 
 <script>
+	// Load MultiBoot slots for responsive PowerModal
+	function loadMultiBootSlotsResponsive() {
+		$.ajax({
+			url: 'multiboot/get',
+			type: 'GET',
+			dataType: 'json',
+			success: function(result) {
+				if (result && result.multiboot && result.slots && result.slots.length > 0) {
+					var slotsContainer = document.getElementById('multiBoot_list_responsive');
+					slotsContainer.innerHTML = '';
+					
+					result.slots.forEach(function(slot) {
+						console.log(slot);
+						var colDiv = document.createElement('div');
+						colDiv.className = 'col-xs-6 m-t-10';
+						var button = document.createElement('button');
+						button.className = 'btn waves-effect responsivebtn responsivebtnpower btn--skinned';
+						button.style.width = '100%';
+						button.type = 'button';
+						
+						var text = slot.label + ':' + slot.imagename;
+						
+						if (slot.current) {
+							button.style.opacity = '0.6';
+							button.style.fontWeight = 'bold';
+							button.innerHTML = '<h6 style="margin: 0; font-size: 12px;">' + text + '</h6>';
+							button.disabled = true;
+						} else {
+							button.innerHTML = '<h6 style="margin: 0; font-size: 12px;">' + text + '</h6>';
+							button.onclick = function() {
+								handle_multiboot_reboot_responsive(slot.slot, slot.bootCode);
+								return false;
+							};
+						}
+						
+						colDiv.appendChild(button);
+						slotsContainer.appendChild(colDiv);
+					});
+					
+					document.getElementById('multiBoot_container_responsive').style.display = 'block';
+				}
+			}
+		});
+	}
+	
+	function handle_multiboot_reboot_responsive(slot, bootCode) {
+		\$("#PowerModal").modal('hide');
+		let sp = loadspinner.replace("'spinner'","'spinner1'");
+		load_reboot_dialog(sp, "$tstrings['reboot_box']");
+		wait_for_openwebif();
+		setTimeout(function () {
+			webapi_execute('multiboot/set?slot=' + encodeURIComponent(slot) + '&bootcode=' + encodeURIComponent(bootCode));
+		}, 1000);
+	}
 
 	\$(document).ready(function() {
+		directlink();
+		
+		// Load MultiBoot slots when PowerModal opens
+		\$('#PowerModal').on('show.bs.modal', function (e) {
+			loadMultiBootSlotsResponsive();
+		});
+		
 		\$(".remote__button").click(function(e) {
 			var d = \$(this).data("code");
 			if (d != undefined) {

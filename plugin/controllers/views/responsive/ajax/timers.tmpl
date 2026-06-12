@@ -51,7 +51,7 @@
 
 #for $timer in $timers
 
-#set $sref=quote($timer.serviceref, safe=' ~@#$&()*!+=:;,.?/\'')
+#set $sref=quote($timer.serviceref, safe=' ~@#$()*!+=:;,.?/\'')
 #set $tname=quote($timer.name)
 #set $metadata = $dumps({ 'sref': quote($timer.serviceref), 'begin': $timer.begin, 'end': $timer.end }, indent=None, separators=(",", ":"))
 
@@ -139,7 +139,7 @@
 			</h2>
 		</div>
 		<div class="col-xs-6">
-		#set $sref=quote($timer.serviceref, safe=' ~@#$&()*!+=:;,.?/\'')
+		#set $sref=quote($timer.serviceref, safe=' ~@#$()*!+=:;,.?/\'')
 		#set $tname=quote($timer.name)
 
 		<ul class="header-dropdown" style="top: 0; right: 5px;">

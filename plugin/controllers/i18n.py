@@ -467,7 +467,7 @@ tstrings = {
 	'bqe_rename_marker': _("Enter a name for the new marker"),
 	'bqe_filename': _("A filename is required"),
 	'bqe_restore_question': _("Are you sure you want to restore from file?"),
-	'bqe_loading': _("Loading..."),
+	'loading1': _("Loading..."),
 
 	'via': _("via"),
 	'zap_record': _("Zap & Record"),
@@ -608,4 +608,14 @@ tstrings = {
 	'before': _("Before"),
 	'select_directory': _("Select Directory"),
 	'showepghistory': _("Show EPG History"),
+	'showcompacttimerlist': _("Show Compact Timer List"),
+	'showcompactepglist': _("Show Compact EPG List"),
+	'multiboot_slots': _("MultiBoot Slots"),
+	'run_script': _("Run Script"),
+	'scripts': _("Scripts"),
+	'executing': _("Executing..."),
+	'script_completed': _("Script completed"),
+	'saving': _("Saving..."),
+	'show_description': _("Show description"),
+
 }

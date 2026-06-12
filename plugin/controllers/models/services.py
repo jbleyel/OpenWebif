@@ -1,7 +1,7 @@
 ##########################################################################
 # OpenWebif: services
 ##########################################################################
-# Copyright (C) 2011 - 2022 E2OpenPlugins
+# Copyright (C) 2011 - 2026 E2OpenPlugins, jbleyel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -38,8 +38,17 @@ from Screens.InfoBar import InfoBar
 from .info import getOrbitalText, getOrb
 from ..utilities import parse_servicereference, SERVICE_TYPE_LOOKUP, NS_LOOKUP
 from ..i18n import _, tstrings
-from ..defaults import PICON_PATH
+from ..defaults import PICON_PATH, STREAMRELAY, LCNSUPPORT
 from .epg import EPG, convertGenre, getIPTVLink, filterName, convertDesc, GetWithAlternative
+
+try:
+	from Components.Renderer.Picon import piconLocator
+	getPiconName = piconLocator.getPiconName
+except ImportError:
+	try:
+		from Components.Renderer.Picon import getPiconName
+	except ImportError:
+		getPiconName = None
 
 
 def getServiceInfoString(info, what):
@@ -94,10 +103,11 @@ def getCurrentService(session):
 			"tsid": getServiceInfoString(info, iServiceInformation.sTSID),
 			"onid": getServiceInfoString(info, iServiceInformation.sONID),
 			"sid": getServiceInfoString(info, iServiceInformation.sSID),
-			"ref": quote(ref, safe=' ~@#$&()*!+=:;,.?/\''),
+			"ref": quote(ref, safe=' ~@#$()*!+=:;,.?/\''),
 			"iswidescreen": info.getInfo(iServiceInformation.sAspect) in (3, 4, 7, 8, 0xB, 0xC, 0xF, 0x10),
 			"bqref": quote(bqref, safe=' ~@#$&()*!+=:;,.?/\''),
-			"bqname": bqname
+			"bqname": bqname,
+			"hbbtvurl": info.getInfoString(iServiceInformation.sHBBTVUrl)
 		}
 	except Exception as e:
 		print(str(e))
@@ -120,7 +130,8 @@ def getCurrentService(session):
 			"ref": "",
 			"iswidescreen": False,
 			"bqref": "",
-			"bqname": ""
+			"bqname": "",
+			"hbbtvurl": ""
 		}
 
 
@@ -403,22 +414,32 @@ def getChannels(idbouquet, stype):
 	epgnownextevents = epg.getMultiChannelNowNextEvents([item[0] for item in channels])
 	index = -2
 
+	streamRelay = []
+	streamrelayport = 17999
+	if STREAMRELAY:
+		streamrelayport = config.misc.softcam_streamrelay_port.value
+
+		try:
+			with open("/etc/enigma2/whitelist_streamrelay") as fd:
+				streamRelay = [line.strip() for line in fd.readlines()]
+		except OSError:
+			pass
+
 	for channel in channels:
 		index = index + 2  # each channel has a `now` and a `next` event entry
 		chan = {
-			'ref': quote(channel[0], safe=' ~@%#$&()*!+=:;,.?/\'')
+			'ref': quote(channel[0], safe=' ~@%#$()*!+=:;,.?/\'')
 		}
 
 		if chan['ref'].split(":")[1] == '320':  # Hide hidden number markers
 			continue
 		chan['name'] = filterName(channel[1])
-		if chan['ref'].split(":")[0] == '5002':  # BAD fix !!! this needs to fix in enigma2 !!!
-			chan['name'] = chan['ref'].split(":")[-1]
 		# IPTV
 		ref = chan['ref']
-		icam = "%3a17999/" in ref
-		chan['link'] = "" if icam else getIPTVLink(chan['ref'])
-		chan['icam'] = icam
+		isStreamRelay = f"%3a{streamrelayport}/" in ref
+		chan['link'] = "" if isStreamRelay else getIPTVLink(chan['ref'])
+		if isStreamRelay or (streamRelay and ref in streamRelay):
+			chan['sr'] = "1"
 
 		if not int(channel[0].split(":")[1]) & 64:
 			psref = parse_servicereference(channel[0])
@@ -480,7 +501,7 @@ def getChannels(idbouquet, stype):
 	return {"channels": ret}
 
 
-def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False, picon=False, noiptv=False, removenamefromsref=False, excludeprogram=False, excludevod=False):
+def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False, picon=False, noiptv=False, removenamefromsref=False, excludeprogram=False, excludevod=False, showstreamrelay=False):
 	starttime = datetime.now()
 	services = []
 	allproviders = {}
@@ -506,8 +527,20 @@ def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False
 			for sitem in slist:
 				allproviders[sitem[0]] = provider[1]
 
+	streamRelay = []
+	if showstreamrelay:
+		try:
+			with open("/etc/enigma2/whitelist_streamrelay") as fd:
+				streamRelay = [line.strip() for line in fd.readlines()]
+		except OSError:
+			pass
+
 	bqservices = servicehandler.list(eServiceReference(sref))
-	slist = bqservices and bqservices.getContent("CN" if removenamefromsref else "SN", True)
+	contentFilter = "CN" if removenamefromsref else "SN"
+	if LCNSUPPORT:
+		contentFilter += "L"
+
+	slist = bqservices and bqservices.getContent(contentFilter, True)
 
 	opos = 0
 	for sitem in slist:
@@ -520,7 +553,7 @@ def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False
 				flags = int(sref.split(":")[1])
 				hs = flags & 512  # eServiceReference.isInvisible
 				sp = flags & 256  # eServiceReference.isNumberedMarker
-				#sp = (sref[:7] == '1:832:D') or (sref[:7] == '1:832:1') or (sref[:6] == '1:320:')
+				# sp = (sref[:7] == '1:832:D') or (sref[:7] == '1:832:1') or (sref[:6] == '1:320:')
 				if not hs or sp:  # 512 is hidden service on sifteam image. Doesn't affect other images
 					opos = opos + 1
 					if not sp and flags & 64:  # eServiceReference.isMarker:
@@ -555,6 +588,13 @@ def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False
 					service['provider'] = allproviders[sitem[0]]
 				else:
 					service['provider'] = ""
+			if flags == 0 and LCNSUPPORT:
+				LCN = sitem[2]
+				if LCN:
+					service['lcn'] = LCN
+			if showstreamrelay:
+				service['streamrelay'] = sr in streamRelay
+
 			services.append(service)
 
 	timeelapsed = datetime.now() - starttime
@@ -566,7 +606,7 @@ def getServices(sref, showall=True, showhidden=False, pos=0, showproviders=False
 	}
 
 
-def getAllServices(mode, noiptv=False, nolastscanned=False, removenamefromsref=False, showall=True, showproviders=False, excludeprogram=False, excludevod=False):
+def getAllServices(mode, noiptv=False, nolastscanned=False, removenamefromsref=False, showall=True, showproviders=False, excludeprogram=False, excludevod=False, showstreamrelay=False):
 	starttime = datetime.now()
 	services = []
 	if mode is None:
@@ -576,7 +616,7 @@ def getAllServices(mode, noiptv=False, nolastscanned=False, removenamefromsref=F
 	for bouquet in bouquets:
 		if nolastscanned and 'LastScanned' in bouquet[0]:
 			continue
-		sv = getServices(sref=bouquet[0], showall=showall, showhidden=False, pos=pos, showproviders=showproviders, noiptv=noiptv, removenamefromsref=removenamefromsref, excludeprogram=excludeprogram, excludevod=excludevod)
+		sv = getServices(sref=bouquet[0], showall=showall, showhidden=False, pos=pos, showproviders=showproviders, noiptv=noiptv, removenamefromsref=removenamefromsref, excludeprogram=excludeprogram, excludevod=excludevod, showstreamrelay=showstreamrelay)
 		services.append({
 			"servicereference": bouquet[0],
 			"servicename": bouquet[1],
@@ -586,6 +626,39 @@ def getAllServices(mode, noiptv=False, nolastscanned=False, removenamefromsref=F
 
 	timeelapsed = datetime.now() - starttime
 
+	return {
+		"result": True,
+		"processingtime": f"{timeelapsed}",
+		"services": services
+	}
+
+
+def getAllServicesRaw(mode, csv=False):
+	starttime = datetime.now()
+	services = []
+	servicecenter = eServiceCenter.getInstance()
+
+	if mode == "radio":
+		refStr = "1:7:2:0:0:0:0:0:0:0:(type == 2) || (type == 10) ORDER BY name"
+	elif mode == "tv":
+		refStr = "1:7:1:0:0:0:0:0:0:0:(type == 1) || (type == 17) || (type == 195) || (type == 25) || (type == 22) || (type == 31) || (type == 211) ORDER BY name"
+	else:
+		refStr = "1:7:0:0:0:0:0:0:0:0:(type == 2) || (type == 10) || (type == 1) || (type == 17) || (type == 195) || (type == 25) || (type == 22) || (type == 31) || (type == 211)  ORDER BY name"
+	servicelist = servicecenter.list(eServiceReference(refStr))
+	servicelist = servicelist and servicelist.getContent('SN') or []
+	if csv:
+		services.append("\"ServiceReference\",\"ServiceName\"")
+		for service in servicelist:
+			services.append(f"\"{service[0]}\",\"{service[1]}\"")
+		return "\n".join(services)
+	else:
+		for service in servicelist:
+			service2 = {}
+			service2['servicereference'] = service[0]
+			service2['servicename'] = service[1]
+			services.append(service2)
+
+	timeelapsed = datetime.now() - starttime
 	return {
 		"result": True,
 		"processingtime": f"{timeelapsed}",
@@ -640,7 +713,7 @@ def getSubServices(session):
 		if subservices and subservices.getNumberOfSubservices() > 0:
 			# print(subservices.getNumberOfSubservices())
 
-			for i in list(range(subservices.getNumberOfSubservices())):
+			for i in range(subservices.getNumberOfSubservices()):
 				subservice = subservices.getSubservice(i)
 				services.append({
 					"servicereference": subservice.toString(),
@@ -667,7 +740,7 @@ def getTimerEventStatus(starttime, endtime, sref, timers=None):
 	# we cannot simply check against timer.eit, because a timer
 	# does not necessarily have one belonging to an epg event id.
 
-	#catch ValueError
+	# catch ValueError
 	endtime = endtime - 120  # TODO: find out what this 120 means
 	timerlist = {}
 	if not timers:
@@ -719,7 +792,7 @@ def getEvent(sref, eventid, encode=True):
 		info['genre'], info['genreid'] = convertGenre(event[8])
 		info['picon'] = getPicon(event[7])
 		info['timer'] = getTimerEventStatus(event[1], event[1] + event[2], eventlookuptable, None)
-		info['link'] = getIPTVLink(event[7])
+		info['link'] = getIPTVLink(event[7]).replace("%253a", ":")
 	return {'event': info}
 
 
@@ -733,12 +806,13 @@ def getChannelEpg(ref, begintime=-1, endtime=-1, encode=True, nownext=False):
 		# When querying EPG, we don't need URL; also getPicon doesn't like URL
 		if "://" in ref:
 			_ref = ":".join(ref.split(":")[:10]) + "::" + ref.split(":")[-1]
+			ref = ref.replace("://", "%3a//")
 		else:
 			_ref = ref
 
 		picon = getPicon(_ref)
 		epg = EPG()
-		events = epg.getChannelEvents(_ref, begintime, endtime, encode, picon, nownext)
+		events = epg.getChannelEvents(_ref, ref, begintime, endtime, encode, picon, nownext)
 		if events:
 			return {"events": events, "result": True}
 # TODO do we need this?
@@ -817,7 +891,7 @@ def getMultiChannelNowNextEpg(slist, encode=False):
 	return {"events": events, "result": True}
 
 
-def getBouquetNowNextEpg(bqref, nowornext, encode=False, showisplayable=False):
+def getBouquetNowNextEpg(bqref, nowornext, encode=False, showisplayable=False, showstreamrelay=False):
 	bqref = unquote(bqref)
 	services = eServiceCenter.getInstance().list(eServiceReference(bqref))
 	if not services:
@@ -868,6 +942,15 @@ def getBouquetNowNextEpg(bqref, nowornext, encode=False, showisplayable=False):
 				query.append((service, nowornext, -1))
 
 	epg = EPG()
+	streamRelay = []
+	if showstreamrelay:
+		try:
+			with open("/etc/enigma2/whitelist_streamrelay") as fd:
+				streamRelay = [line.strip() for line in fd.readlines()]
+		except OSError:
+			pass
+	epg.streamRelay = streamRelay
+
 	events = epg.getBouquetNowNextEpg(query, encode, alter=True, full=True)
 
 	return {"events": events, "isplayable": isPlayable, "result": True}
@@ -1118,9 +1201,13 @@ def getPicon(sname, pp=None, defaultpicon=True):
 	if pp is None:
 		pp = PICON_PATH
 	if pp is not None:
+		if getPiconName is not None:  # use distro own picon resolver
+			return sname and (p := getPiconName(sname)) is not None and p.replace(pp, PIC) or (DEFAULTPIC if defaultpicon else None)
+
 		# remove URL part
 		if ("://" in sname) or ("%3a//" in sname) or ("%3A//" in sname):
 			cname = unquote(sname.split(":")[-1])
+			cname = cname.split("•")[0]  # remove provider from cname
 			sname = unquote(sname)
 			# sname = ":".join(sname.split(":")[:10]) -> old way
 			sname = ":".join(sname.split("://")[:1])

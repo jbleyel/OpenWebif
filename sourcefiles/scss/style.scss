@@ -1,3 +1,4 @@
+@use "sass:meta";
 /*
  style.css: openwebif stylesheet
  Version 1.1
@@ -208,7 +209,7 @@ FIXME : complete reorg header
    }
  }
 
-@import "leftmenu";
+@include meta.load-css("leftmenu");
 
 
 .ui-tabs
@@ -249,33 +250,56 @@ FIXME : complete reorg header
 	display: inline-block;
 }
 
+.buttonGrid
+{
+	text-align: center;
+}
+
+.buttonGrid ul {
+	list-style: none;
+	padding: 0;
+}
+
+.buttonGrid li {
+	text-align: center;
+	cursor: pointer;
+}
+
+.buttonGrid li:hover {
+	border: 1px solid #000000;
+}
+
 .powerStateButtons
 {
 	width: 250px;
 	margin-top: 20px;
 	margin-left: auto;
 	margin-right: auto;
-	text-align: center;
-}
-
-.powerStateButtons ul {
-	list-style: none;
-	padding: 0;
 }
 
 .powerStateButtons li {
 	margin-top: 10px;
 	width: 220px;
-	line-height: 40px;
-	text-align: center;
+	line-height: 24px;
 	font-size: 18px;
-	cursor: pointer;
 }
 
-.powerStateButtons li:hover {
-	border: 1px solid #000000;
+.multibootButtons
+{
+	margin: 0;
 }
 
+.multibootButtons ul {
+	margin: 0;
+}
+
+.multibootButtons li {
+	margin-top: 8px;
+	width: 100%;
+	font-size: 12px;
+	padding: 8px 12px;
+	box-sizing: border-box;
+}
 
 .moviecontainer_left {
 	float: left;
@@ -538,7 +562,7 @@ font-size:16px;font-weight:bold;opacity:0.3;
 
 .osdch {font-weight:bold;text-decoration:none;}
 
-@import "channels";
+@include meta.load-css("channels");
 
 .m_buttons .ui-progressbar { height:0.5em; width: 90%; margin: 2px 0 4px; }
 
@@ -910,4 +934,59 @@ i.fa-mobile {font-size: 22px;}
 	background: #b0b0b0;
 }
 
-@import "channel_tags";
+.compactepg {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.compactepg .tm_text {
+    flex: 1;
+    min-width: 0;
+}
+
+.compactepg .tm_title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.compactepg .tm_actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.epg-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+}
+
+.epg-toggle i {
+	font-size: 18px;
+}
+
+.epg-desc {
+    display: none;
+    flex: 0 0 100%;
+    width: 100%;
+    margin: 0 3px 3px 3px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    background: #f9f9f9;
+    font-size: 0.8em;
+}
+
+
+@include meta.load-css("channel_tags");

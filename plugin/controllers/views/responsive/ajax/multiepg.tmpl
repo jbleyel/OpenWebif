@@ -281,7 +281,7 @@
 	#for $event in $eventlist[0]
 		#set pad = 0
 		#if $c == 0
-			#set $ref = quote(event['ref'], safe=' ~@#$&()*!+=:;,.?/\'')
+			#set $ref = quote(event['ref'], safe=' ~@#$()*!+=:;,.?/\'')
 			#set pad = 58 + ($event.begin_timestamp - $first) / 6
 												<li class="event" style="width:${pad}px;border:none;">
 												</li>

@@ -1,9 +1,9 @@
 //******************************************************************************
 //* bqe.js: openwebif Bouqueteditor plugin
-//* Version 2.10
+//* Version 2.12
 //******************************************************************************
-//* Copyright (C) 2014-2022 jbleyel
-//* Copyright (C) 2014-2022 E2OpenPlugins
+//* Copyright (C) 2014-2025 jbleyel
+//* Copyright (C) 2014-2025 E2OpenPlugins
 //*
 //* Authors: jbleyel
 //*          Robert Damas <https://github.com/rdamas>
@@ -19,11 +19,19 @@
 //* V 2.8 - show ns text #840
 //* V 2.9 - fix ns text, show provider as tooltip #840
 //* V 2.10 - use let instead of var
+//* V 2.11 - fix marker pos
+//* V 2.12 - show lcn
 
 //* License GPL V2
 //* https://github.com/oe-alliance/OpenWebif/blob/main/LICENSE.txt
 //*******************************************************************************
 // TODO: alternatives
+
+function zeroPad(num, places) {
+	var zero = places - num.length + 1;
+	return Array(+(zero > 0 && zero)).join("0") + num;
+}
+
 
 (function() {
 
@@ -248,6 +256,12 @@
 					let sref = val['servicereference'];
 					let name = val['servicename'];
 					let prov = val['provider'];
+					var lcn = val['lcn'];
+					if (lcn == undefined || lcn == "") {
+						lcn = "";
+					} else {
+						lcn = "#" + zeroPad(lcn, 4) + " - "
+					}
 					let stype = sref.split(':')[2];
 					let ns = sref.split(':')[6];
 					let _ns = self.getNS(ns);
@@ -255,7 +269,7 @@
 					options.push( $('<li/>', {
 						class: "ui-widget-content",
 						data: { stype: stype, sref: sref }
-					}).html(name+m) );
+					}).html(lcn+name+m) );
 				});
 				if (callback) {
 					callback(options);
@@ -332,7 +346,8 @@
 							let pos = spos + val['pos'];
 							if(val['ismarker'] == 2)
 								m= '<span style="float:right">(S)</span>';
-							name = pos.toString() + ' - ' + name;
+							if(val['ismarker'] != 1)
+								name = pos.toString() + ' - ' + name;
 							if(name!='')
 								options.push( $('<li/>', {
 									class: "ui-widget-content",

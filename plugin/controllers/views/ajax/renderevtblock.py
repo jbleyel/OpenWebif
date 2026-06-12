@@ -1,6 +1,6 @@
 from time import localtime, strftime
 from urllib.parse import quote
-#from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
+# from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
 
 
 class renderEvtBlock:
@@ -22,7 +22,7 @@ class renderEvtBlock:
             timerEventSymbol = ''
             timerbar = ''
 
-        ref = quote(event['ref'], safe=' ~@#$&()*!+=:;,.?/\'')
+        ref = quote(event['ref'], safe=' ~@#$()*!+=:;,.?/\'').replace('%253a//', '%3a//')
         hourmin = strftime("%H:%M", localtime(event['begin_timestamp']))
 
         return f"""

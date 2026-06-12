@@ -60,6 +60,8 @@ config.OpenWebif.webcache.showiptvchannelsinselection = ConfigYesNo(default=True
 config.OpenWebif.webcache.screenshotchannelname = ConfigYesNo(default=False)
 config.OpenWebif.webcache.showallpackages = ConfigYesNo(default=False)
 config.OpenWebif.webcache.showepghistory = ConfigYesNo(default=True)
+config.OpenWebif.webcache.compacttimerlist = ConfigYesNo(default=False)
+config.OpenWebif.webcache.compactepglist = ConfigYesNo(default=False)
 config.OpenWebif.webcache.smallremote = ConfigSelection(default='new', choices=['new', 'ims'])
 config.OpenWebif.webcache.screenshot_high_resolution = ConfigYesNo(default=True)
 config.OpenWebif.webcache.screenshot_refresh_auto = ConfigYesNo(default=False)
@@ -195,7 +197,7 @@ def Plugins(**kwargs):
 		PluginDescriptor(where=[PluginDescriptor.WHERE_NETWORKCONFIG_READ], fnc=IfUpIfDown),
 		]
 	screenwidth = getDesktop(0).size().width()
-	if BoxInfo.getItem("distro") in ("openatv"):
+	if BoxInfo.getItem("distro") == "openatv":
 		result.append(PluginDescriptor(name=PLUGIN_NAME, description=_(PLUGIN_DESCRIPTION), where=PluginDescriptor.WHERE_MENU, fnc=main_menu))
 	if screenwidth and screenwidth == 1920:
 		result.append(PluginDescriptor(name=PLUGIN_NAME, description=_(PLUGIN_DESCRIPTION), icon="openwebifhd.png", where=[PluginDescriptor.WHERE_PLUGINMENU], fnc=confplug))

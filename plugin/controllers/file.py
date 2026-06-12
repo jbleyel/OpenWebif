@@ -40,7 +40,7 @@ def new_getRequestHostname(self):
 	return self.getHost().host.encode('ascii')
 
 # Do wee need this?
-#http.Request.getRequestHostname = new_getRequestHostname
+# http.Request.getRequestHostname = new_getRequestHostname
 
 
 class FileController(resource.Resource):
@@ -69,7 +69,7 @@ class FileController(resource.Resource):
 
 				response = f"#EXTM3U\n#EXTVLCOPT:http-reconnect=true\n#EXTINF:-1,{name}\n{proto}://{request.getRequestHostname()}:{port}/file?action=download&file={quote(filename)}"
 				request.setHeader("Content-Disposition", f'attachment;filename="{name}.m3u"')
-				request.setHeader("Content-Type", "application/x-mpegurl")
+				request.setHeader("Content-Type", "application/vnd.apple.mpegurl")
 				return response
 			elif action == "delete":
 				request.setResponseCode(http.OK)
@@ -94,14 +94,14 @@ class FileController(resource.Resource):
 				if path == '/':
 					path = ''
 				try:
-					files = glob(path + '/' + pattern)
+					files = glob(f"{path}/{pattern}")
 				except OSError:
 					files = []
 				files.sort()
 				tmpfiles = files[:]
 				for x in tmpfiles:
 					if isdir(x):
-						directories.append(x + '/')
+						directories.append(f"{x}/")
 						files.remove(x)
 				if nofiles:
 					files = []
@@ -120,7 +120,7 @@ class FileController(resource.Resource):
 				if path == "/":
 					path = ""
 				try:
-					files = glob(path + '/*')
+					files = glob(f"{path}/*")
 				except OSError:
 					files = []
 				files.sort()

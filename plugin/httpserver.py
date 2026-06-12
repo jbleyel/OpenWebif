@@ -40,6 +40,28 @@ from .controllers.root import RootController
 from .controllers.utilities import toString
 from .sslcertificate import SSLCertificateGenerator, KEY_FILE, CERT_FILE, CA_FILE, CHAIN_FILE
 
+try:
+	from enigma import checkLogin
+except ImportError:
+	from crypt import crypt
+	from pwd import getpwnam
+	from spwd import getspnam
+
+	def checkLogin(user, passwd):
+		cpass = None
+		try:
+			cpass = getpwnam(user)[1]
+		except:  # nosec # noqa: E722
+			return False
+		if cpass:
+			if cpass == 'x' or cpass == '*':
+				try:
+					cpass = getspnam(user)[1]
+				except:  # nosec # noqa: E722
+					return False
+			return crypt(passwd, cpass) == cpass
+		return False
+
 
 global listener, server_to_stop, site, sslsite
 listener = []
@@ -314,8 +336,8 @@ class AuthResource(resource.Resource):
 		return False
 
 	def render(self, request):
-		host = request.getHost().host
-		peer = request.getClientIP()
+		# host = request.getHost().host
+		peer = request.getClientAddress().host
 		if peer is None:
 			peer = request.transport.socket.getpeername()[0]
 
@@ -326,7 +348,7 @@ class AuthResource(resource.Resource):
 			peer = peer.split("%")[0]
 
 		if self.login(request.getUser(), request.getPassword(), peer) is False:
-			request.setHeader('WWW-authenticate', f'Basic realm="OpenWebif"')
+			request.setHeader('WWW-authenticate', 'Basic realm="OpenWebif"')
 			errpage = resource.ErrorPage(http.UNAUTHORIZED, "Unauthorized", "401 Authentication required")
 			return errpage.render(request)
 		else:
@@ -336,7 +358,7 @@ class AuthResource(resource.Resource):
 		global site, sslsite
 		session = request.getSession().sessionNamespaces
 		host = request.getHost().host
-		peer = request.getClientIP()
+		peer = request.getClientAddress().host
 		host = toString(host)
 		if request.getHeader("x-forwarded-for"):
 			peer = request.getHeader("x-forwarded-for")
@@ -403,7 +425,7 @@ class AuthResource(resource.Resource):
 			return self.resource.getChildWithDefault(path, request)
 
 		if self.login(ruser, rpw, peer) is False:
-			request.setHeader('WWW-authenticate', f'Basic realm="OpenWebif"')
+			request.setHeader('WWW-authenticate', 'Basic realm="OpenWebif"')
 			return resource.ErrorPage(http.UNAUTHORIZED, "Unauthorized", "401 Authentication required")
 		else:
 			session["logged"] = True
@@ -424,22 +446,7 @@ class AuthResource(resource.Resource):
 						samenet = True
 			if not (ipaddress.ip_address(str(peer)).is_private or samenet):
 				return False
-		from crypt import crypt
-		from pwd import getpwnam
-		from spwd import getspnam
-		cpass = None
-		try:
-			cpass = getpwnam(user)[1]
-		except:  # nosec # noqa: E722
-			return False
-		if cpass:
-			if cpass == 'x' or cpass == '*':
-				try:
-					cpass = getspnam(user)[1]
-				except:  # nosec # noqa: E722
-					return False
-			return crypt(passwd, cpass) == cpass
-		return False
+		return checkLogin(user, passwd)
 
 
 class StopServer:
@@ -486,7 +493,7 @@ def installCertificates(session):
 	certgenerator = SSLCertificateGenerator()
 	try:
 		certgenerator.installCertificates()
-	except OSError as e:
+	except OSError:
 		# Disable https
 		config.OpenWebif.https_enabled.value = False
 		config.OpenWebif.https_enabled.save()

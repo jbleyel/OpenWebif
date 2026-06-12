@@ -1,3 +1,23 @@
+##########################################################################
+# OpenWebif: defaults
+##########################################################################
+# Copyright (C) 2022 - 2025 jbleyel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
+##########################################################################
+
 from glob import glob
 from re import search, MULTILINE
 from os import symlink
@@ -71,14 +91,14 @@ def setMobile(ismobile=False):
 
 def getViewsPath(file=""):
 	global MOBILEDEVICE
-	if (comp_config.OpenWebif.webcache.responsive_enabled.value or MOBILEDEVICE) and exists(VIEWS_PATH + "/responsive") and not (file.startswith('web/') or file.startswith('/web/')):
-		return VIEWS_PATH + "/responsive/" + file
+	if (comp_config.OpenWebif.webcache.responsive_enabled.value or MOBILEDEVICE) and exists(f"{VIEWS_PATH}/responsive") and not (file.startswith('web/') or file.startswith('/web/')):
+		return f"{VIEWS_PATH}/responsive/{file}"
 	else:
-		return VIEWS_PATH + "/" + file
+		return f"{VIEWS_PATH}/{file}"
 
 
 def getPublicPath(file=""):
-	return PUBLIC_PATH + "/" + file
+	return f"{PUBLIC_PATH}/{file}"
 
 
 def getPiconPath():
@@ -106,7 +126,7 @@ def getPiconPath():
 	for prefix in PICON_PREFIXES:
 		if isdir(prefix):
 			for folder in PICON_FOLDERS:
-				current = prefix + folder + '/'
+				current = f"{prefix}{folder}/"
 				if isdir(current):
 					print(f"Current Picon Path : {current}")
 					return current
@@ -213,7 +233,7 @@ def getATSearchtypes():
 
 def getTextInputSupport():
 	try:
-		from enigma import setPrevAsciiCode
+		from enigma import setPrevAsciiCode  # noqa: F401
 		return True
 	except ImportError:
 		return False
@@ -271,6 +291,19 @@ def getCustomCSS(css):
 	return ""
 
 
+def getLCNVer():
+	ver = 1
+	try:
+		lines = []
+		with open("/etc/enigma2/lcndb") as fd:
+			lines = [line.strip().upper() for line in fd.readlines()]
+		if lines and lines[0] == "#VERSION 2":
+			ver = 2
+	except OSError:
+		pass
+	return ver
+
+
 OPENWEBIFPACKAGEVERSION = getOpenwebifPackageVersion()
 
 USERCSSCLASSIC = getCustomCSS("classic")
@@ -296,3 +329,7 @@ DEFAULT_RCU = getDefaultRcu()
 GRABPIP = BoxInfo.getItem("ArchIsARM")
 
 LCD = ("lcd" in MODEL) or ("lcd" in BoxInfo.getItem("displaytype"))
+
+STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(comp_config.misc, "softcam_streamrelay_port")
+
+LCNSUPPORT = BoxInfo.getItem("distro") == "openatv" and getLCNVer() == 2

@@ -1,3 +1,56 @@
+## Version 2.3.3
+* refactor config settings
+
+## Version 2.3.2
+* add compact epg list
+* add save callback for setup
+
+## Version 2.3.1
+* add compact timer list
+
+## Version 2.3.0
+* add config batch save feature with Save button
+* add new /api/saveconfigbatch endpoint for batch configuration updates via JSON
+* improve configuration save handling with single batch request instead of individual requests
+* add saveAllConfig() JavaScript function for efficient multi-config saves
+* add multiboot support
+* add scripts support
+* fix autotimer selection
+
+## Version 2.2.4
+* improve IPTV
+
+## Version 2.2.3
+* improve m3u browser handling
+
+## Version 2.2.2
+* add allservices and allservicescsv
+
+## Version 2.2.1
+* add hbbtv url to getcurrent api
+
+## Version 2.2.0
+* add movieresumepoint to movie api
+* add streamrelay flag to epg api
+* add showstreamrelay, showall, noiptv parameter to getservices api
+* add support for new ConfigSelectionInteger
+* add support for new allowDefault setup.xml attribute
+* add new url parameter "returntimer" for timeradd and timerchange api to return the timerdata in response
+* add api/epgservicenownext
+
+## Version 2.1.1
+* show lcn in bouquet editor
+* add more options to servicelist reload api
+
+## Version 2.1.0
+* improve streamrelay
+* improve stream tuner info
+
+## Version 2.0.9
+* use python fstring
+* improve python imports
+* add whitelist_streamrelay support
+
 ## Version 2.0.8
 * improve multi epg
 

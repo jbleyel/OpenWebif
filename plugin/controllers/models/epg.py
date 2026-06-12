@@ -86,6 +86,8 @@ def getIPTVLink(ref):
 			ref = ref[ref.index("http"):]
 			ref = ref.replace("%3a", ":").replace("%3A", ":").replace("http://127.0.0.1:8088/", "")
 			return ref
+		else:
+			return "NoStream"
 	return ""
 
 
@@ -145,6 +147,7 @@ class EPG():
 		self.doref = True
 		self.currentpicon = ""
 		self.currentsref = ""
+		self.streamRelay = []
 
 	def search(self, querystring, searchfulldescription=False):
 		querytype = eEPGCache.PARTIAL_TITLE_SEARCH
@@ -157,7 +160,7 @@ class EPG():
 		criteria = (SEARCH_FIELDS, MAX_RESULTS, querytype, querystring, CASE_INSENSITIVE_QUERY)
 		return self._instance.search(criteria)
 
-	def getChannelEvents(self, sref, starttime, endtime, encode, picon, nownext):
+	def getChannelEvents(self, sref, fullsref, starttime, endtime, encode, picon, nownext):
 		if not sref:
 			error("A required parameter 'sRef' is missing!", "EPG")
 			return []
@@ -166,7 +169,7 @@ class EPG():
 
 		self.doencode = encode
 		self.currentpicon = picon
-		self.currentsref = sref
+		self.currentsref = fullsref
 		if nownext:
 			criteria = [SINGLE_CHANNEL_FIELDS_NN]
 			criteria.append((sref, NOW_EVENT, -1))
@@ -247,6 +250,7 @@ class EPG():
 	def convertEvent(self, *event):
 		encode = self.doencode
 		alter = self.doalter
+		streamRelay = self.streamRelay
 		ev = {}
 		ev["id"] = event[0]
 		if event[1]:
@@ -264,6 +268,9 @@ class EPG():
 			ev["now_timestamp"] = event[3]
 			ev["remaining"] = (event[1] + event[2]) - event[3]
 			ev["genre"], ev["genreid"] = convertGenre(event[7])
+			if streamRelay:
+				ev['streamrelay'] = event[8] in streamRelay
+
 		else:
 			ev["begin_timestamp"] = 0
 			ev["duration_sec"] = 0
