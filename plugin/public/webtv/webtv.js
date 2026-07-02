@@ -7,11 +7,12 @@ var PlayerObj = function () {
 	var _hls = null;
 	var _video = null;
 	return {
-		setup: function (auth, streamingport, live555HlsBase) {
+		setup: function (auth, streamingport, live555HlsBase, strings) {
 			self = this;
 			self.auth = auth;
 			self.streamingport = streamingport;
 			self.live555HlsBase = live555HlsBase || '';
+			self.strings = strings || {};
 			self.pl = GetLSValue('webtvplayerl', 'hls');
 			self.pr = GetLSValue('webtvplayerr', 'hls');
 			self.folderoptions = '';
@@ -20,6 +21,8 @@ var PlayerObj = function () {
 			_video = document.getElementById('hlsPlayer');
 
 			$('#sbtn0').click(function () {
+				self.stop();
+				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'inline-block');
 				$('#streamchannels_chosen').css('display', 'inline-block');
 				$('#streamrecordings_chosen').css('display', 'none');
@@ -27,11 +30,21 @@ var PlayerObj = function () {
 				self.currentp = self.pl;
 			});
 			$('#sbtn1').click(function () {
+				self.stop();
+				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'none');
 				$('#streamrecordings_chosen').css('display', 'inline-block');
 				$('#streamchannels_chosen').css('display', 'none');
 				$('#moviesort-button').show();
 				self.currentp = self.pr;
+			});
+			$('#sbtn2').click(function () {
+				$('#streambouquets_chosen').css('display', 'none');
+				$('#streamchannels_chosen').css('display', 'none');
+				$('#streamrecordings_chosen').css('display', 'none');
+				$('#moviesort-button').hide();
+				SetLSValue('wfollowlive', true);
+				self.setFollowLive();
 			});
 
 			$("#srcbuttons").buttonset();
@@ -46,10 +59,10 @@ var PlayerObj = function () {
 				var iptvurl = $("#streamchannels option:selected").attr('data-iptvurl') || '';
 				if (iptvurl) {
 					self.loadUrl(iptvurl, iptvurl.indexOf('.m3u8') !== -1);
+					self.play();
 				} else {
-					self.setUrl(sref, name, true);
+					self.startLiveChannel(sref, name);
 				}
-				self.play();
 			});
 
 			$("#streamrecordings").chosen({disable_search_threshold: 10, no_results_text: "Oops, nothing found!", width: "400px"});
@@ -77,23 +90,21 @@ var PlayerObj = function () {
 			}
 
 			$('#btnstop').click(function () { self.stop(); $(this).blur(); });
-			$('#btnplay').click(function () { self.play(); $(this).blur(); });
+
+			$('#wzapstream').prop('checked', GetLSValue('webtvzapstream', false));
+			$('#wzapstream').click(function () {
+				SetLSValue('webtvzapstream', $('#wzapstream').is(':checked'));
+				$(this).blur();
+			});
 
 			$('#streamchannels_chosen').css('display', 'inline-block');
 			$('#streamrecordings_chosen').css('display', 'none');
 
 			if (self.live555HlsBase) {
-				$('#wfollowlive').show();
+				$('#sbtn2').show();
 				$('#wfollowlivel').show();
-				$('#wfollowlive').prop('checked', GetLSValue('wfollowlive', false));
-				$('#wfollowlive').click(function () {
-					var on = $('#wfollowlive').is(':checked');
-					SetLSValue('wfollowlive', on);
-					$(this).blur();
-					self.setFollowLive(on);
-				});
 				if (GetLSValue('wfollowlive', false)) {
-					self.setFollowLive(true);
+					$('#sbtn2').trigger('click');
 				}
 			}
 
@@ -121,17 +132,9 @@ var PlayerObj = function () {
 
 			$('#moviesort-button').hide();
 			$('#moviesort-button').css('margin-left', '10px');
-			$('#wautoplay').checkboxradio();
-			$('#wfollowlive').checkboxradio();
 			$('#btnstop').button();
-			$('#btnplay').button();
+			$('#wzapstream').checkboxradio();
 			$("#srcbuttons").buttonset();
-
-			$('#wautoplay').click(function () {
-				SetLSValue('wautoplay', $('#wautoplay').is(':checked'));
-				$(this).blur();
-			});
-			$('#wautoplay').prop('checked', GetLSValue('wautoplay'));
 
 			self.getRecordings('', function () {
 				$('#streamrecordings').trigger("chosen:updated");
@@ -143,6 +146,66 @@ var PlayerObj = function () {
 			} else {
 				self.loadBouquets();
 			}
+
+		}, startLiveChannel: function (sref, name) {
+			if ($('#wzapstream').is(':checked')) {
+				self.zapAndPlay(sref, name);
+				return;
+			}
+			$.ajax({
+				url: '/api/serviceplayable',
+				dataType: 'json',
+				cache: false,
+				data: { sRef: sref, sRefPlaying: current_ref || '' },
+				success: function (data) {
+					if (data.service && data.service.isplayable) {
+						self.setUrl(sref, name, true);
+						self.play();
+					} else {
+						self.confirmZapAndPlay(sref, name);
+					}
+				}
+			});
+
+		}, zapAndPlay: function (sref, name) {
+			$.ajax({
+				url: '/api/zap',
+				dataType: 'json',
+				cache: false,
+				data: { sRef: sref, title: name },
+				success: function () {
+					self.setUrl(sref, name, true);
+					self.play();
+				}
+			});
+
+		}, confirmZapAndPlay: function (sref, name) {
+			var strings = self.strings;
+
+			if (!$('#modaldialog').length) {
+				if (confirm(strings.notunerfree + ' ' + strings.switchchannelquestion)) self.zapAndPlay(sref, name);
+				return;
+			}
+
+			var buttons = {};
+			buttons[strings.yes] = function () {
+				$(this).dialog('close');
+				self.zapAndPlay(sref, name);
+			};
+			buttons[strings.no] = function () {
+				$(this).dialog('close');
+			};
+			$('#modaldialog').empty().append($('<p>').text(strings.switchchannelquestion)).dialog({
+				modal: true,
+				title: strings.notunerfree,
+				autoOpen: true,
+				width: 'auto',
+				buttons: buttons,
+				close: function () {
+					$(this).dialog('destroy');
+					$(this).empty();
+				}
+			});
 
 		}, setUrl: function (sref, name, live) {
 			try {
@@ -205,18 +268,10 @@ var PlayerObj = function () {
 			$("#streamrecordings").append(options);
 			$('#streamrecordings').trigger("chosen:updated");
 
-		}, setFollowLive: function (on) {
-			if (on) {
-				$('#streambouquets_chosen').css('display', 'none');
-				$('#streamchannels_chosen').css('display', 'none');
-				self.stop();
-				self.loadUrl(self.live555HlsBase, true);
-				if (GetLSValue('wautoplay', false)) self.play();
-			} else {
-				$('#streambouquets_chosen').css('display', 'inline-block');
-				$('#streamchannels_chosen').css('display', 'inline-block');
-				self.stop();
-			}
+		}, setFollowLive: function () {
+			self.stop();
+			self.loadUrl(self.live555HlsBase + '?ref=' + encodeURIComponent(current_ref || ''), true);
+			self.play();
 
 		}, loadBouquets: function () {
 			$.ajax({
@@ -249,9 +304,8 @@ var PlayerObj = function () {
 					$("#streamchannels").empty();
 					var options = "<option value=''></option>";
 					$.each(data.services, function (i, s) {
-						var disabled = s.isplayable ? '' : ' disabled';
 						var iptvattr = s.iptvurl ? ' data-iptvurl="' + s.iptvurl.replace(/"/g, '&quot;') + '"' : '';
-						options += "<option value='" + s.servicereference + "'" + disabled + iptvattr + ">" + s.servicename + "</option>";
+						options += "<option value='" + s.servicereference + "'" + iptvattr + ">" + s.servicename + "</option>";
 					});
 					$("#streamchannels").append(options);
 					if (current_ref) $("#streamchannels").val(current_ref);
@@ -263,7 +317,7 @@ var PlayerObj = function () {
 						} else {
 							self.setUrl(current_ref, current_name, true);
 						}
-						if (GetLSValue('wautoplay')) self.play();
+						self.play();
 					}
 				}
 			});

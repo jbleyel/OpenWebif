@@ -49,7 +49,6 @@ MOBILEDEVICE = False
 
 DEBUG_ENABLED = False
 
-MODEL = BoxInfo.getItem("model")
 
 ROOTTV = '1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet'
 
@@ -200,10 +199,10 @@ class Globals:
 		self._hasAutoTimer, self._hasAutoTimerChange, self._hasAutoTimerTest, self._atSearchTypes = self._getAutoTimer()
 		self._hasVPS = isPluginInstalled("vps")
 		self._hasSeries = isPluginInstalled("SeriesPlugin")
+		self._lcnSupport = BoxInfo.getItem("distro") == "openatv" and self.getLCNVer() == 2
+		self._lcd = ("lcd" in BoxInfo.getItem("model")) or ("lcd" in BoxInfo.getItem("displaytype"))
 
 	def initSession(self):
-		self._lcnSupport = BoxInfo.getItem("distro") == "openatv" and self.getLCNVer() == 2
-		self._lcd = ("lcd" in MODEL) or ("lcd" in BoxInfo.getItem("displaytype"))
 		self._transcodingNew = bool(BoxInfo.getItem("HasTranscodingSettings", False))
 		self._transcoding = self._getTranscoding()
 		self._webTV = self._transcoding

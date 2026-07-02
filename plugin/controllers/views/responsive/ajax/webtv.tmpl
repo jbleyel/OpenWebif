@@ -1,5 +1,6 @@
 #filter WebSafe
 #from Plugins.Extensions.OpenWebif.controllers.i18n import tstrings
+#from json import dumps
 
 <link rel="stylesheet" type="text/css" href="/css/chosen.min.css">
 <style>
@@ -26,18 +27,17 @@
 					</div>
 				</div>
 				<div class="row clearfix" style="margin-top:10px; text-align:center;">
-					<label for="wautoplay">Autoplay</label>
-					<input type="checkbox" name="wautoplay" id="wautoplay">
-					<label id="wfollowlivel" for="wfollowlive" style="display:none;">Follow Live</label>
-					<input type="checkbox" name="wfollowlive" id="wfollowlive" style="display:none;">
+					<label for="wzapstream">$tstrings['zapbeforestream']</label>
+					<input type="checkbox" name="wzapstream" id="wzapstream">
 					<span id="srcbuttons" style="margin-left:5px;">
 						<input type="radio" name="srcbutton" id="sbtn0" class="radio--skinned" checked="checked">
 						<label for="sbtn0">$tstrings['channels']</label>
 						<input type="radio" id="sbtn1" name="srcbutton" class="radio--skinned">
 						<label for="sbtn1">$tstrings['movies']</label>
+						<input type="radio" id="sbtn2" name="srcbutton" class="radio--skinned" style="display:none;">
+						<label id="wfollowlivel" for="sbtn2" style="display:none;">Follow Live</label>
 					</span>
 					<button id="btnstop" style="margin-left:5px;">Stop</button>
-					<button id="btnplay" style="margin-left:5px;">Play</button>
 				</div>
 				<div style="display:table;margin-top:10px;margin-bottom:10px;width: 95%;">
 					<div style="display:table;margin:10 auto 10 auto;">
@@ -70,7 +70,7 @@
 <script>
 	jQuery(function() {
 		var playerObj = new PlayerObj();
-		playerObj.setup('$auth', '$streaming_port', '$live555_hls_base');
+		playerObj.setup('$auth', '$streaming_port', '$live555_hls_base', $dumps({'notunerfree': $tstrings['no_tuner_free'], 'switchchannelquestion': $tstrings['switch_channel_question'], 'yes': $tstrings['yes'], 'no': $tstrings['no']}));
 	});
 </script>
 
