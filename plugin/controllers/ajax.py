@@ -340,10 +340,10 @@ class AjaxController(BaseController):
 
 	def P_at(self, request):
 		ret = {}
-		ret['hasVPS'] = 1 if globalVars.hasVPS else 0
-		ret['hasSeriesPlugin'] = 1 if globalVars.hasSeries else 0
-		ret['test'] = 1 if globalVars.hasAutoTimerTest else 0
-		ret['hasChange'] = 1 if globalVars.hasAutoTimerChange else 0
+		ret['hasVPS'] = globalVars.hasVPS
+		ret['hasSeriesPlugin'] = globalVars.hasSeries
+		ret['test'] = globalVars.hasAutoTimerTest
+		ret['hasChange'] = globalVars.hasAutoTimerChange
 		ret['allow_duplicate'] = getInfo()['allow_duplicate']
 		ret['searchTypes'] = globalVars.atSearchTypes
 
