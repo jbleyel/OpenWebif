@@ -86,7 +86,6 @@ def setMobile(ismobile=False):
 
 
 def getViewsPath(file=""):
-	global MOBILEDEVICE
 	if (comp_config.OpenWebif.webcache.responsive_enabled.value or MOBILEDEVICE) and exists(f"{VIEWS_PATH}/responsive") and not (file.startswith('web/') or file.startswith('/web/')):
 		return f"{VIEWS_PATH}/responsive/{file}"
 	else:
@@ -120,60 +119,6 @@ def getOpenwebifPackageVersion():
 			except AttributeError:
 				pass
 	return version
-
-
-def getAutoTimer():
-	try:
-		from Plugins.Extensions.AutoTimer.AutoTimer import AutoTimer  # noqa: F401
-		return True
-	except ImportError:
-		return False
-
-
-def getAutoTimerChangeResource():
-	if HASAUTOTIMER:
-		try:
-			from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerChangeResource  # noqa: F401
-			return True
-		except ImportError:
-			return False
-	else:
-		return False
-
-
-def getAutoTimerTestResource():
-	if HASAUTOTIMER:
-		try:
-			from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerTestResource  # noqa: F401
-			return True
-		except ImportError:
-			return False
-	else:
-		return False
-
-
-def getVPSPlugin():
-	try:
-		from Plugins.SystemPlugins.vps import Vps  # noqa: F401
-		return True
-	except ImportError:
-		return False
-
-
-def getSeriesPlugin():
-	try:
-		from Plugins.Extensions.SeriesPlugin.plugin import Plugins  # noqa: F401
-		return True
-	except ImportError:
-		return False
-
-
-def getATSearchtypes():
-	try:
-		from Plugins.Extensions.AutoTimer.AutoTimer import typeMap
-		return typeMap
-	except ImportError:
-		return {}
 
 
 def getTextInputSupport():
@@ -242,22 +187,9 @@ USERCSSCLASSIC = getCustomCSS("classic")
 
 USERCSSMODERN = getCustomCSS("modern")
 
-HASAUTOTIMER = getAutoTimer()
-
-HASAUTOTIMERCHANGE = getAutoTimerChangeResource()
-
-HASAUTOTIMERTEST = getAutoTimerTestResource()
-
-HASVPS = getVPSPlugin()
-
-HASSERIES = getSeriesPlugin()
-
-ATSEARCHTYPES = getATSearchtypes()
-
 TEXTINPUTSUPPORT = getTextInputSupport()
 
 DEFAULT_RCU = getDefaultRcu()
-
 
 STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(comp_config.misc, "softcam_streamrelay_port")
 
@@ -265,6 +197,9 @@ STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(c
 class Globals:
 	def __init__(self):
 		self._piconPath = self._getPiconPath()
+		self._hasAutoTimer, self._hasAutoTimerChange, self._hasAutoTimerTest, self._atSearchTypes = self._getAutoTimer()
+		self._hasVPS = isPluginInstalled("vps")
+		self._hasSeries = isPluginInstalled("SeriesPlugin")
 
 	def initSession(self):
 		self._lcnSupport = BoxInfo.getItem("distro") == "openatv" and self.getLCNVer() == 2
@@ -363,6 +298,35 @@ class Globals:
 	def refreshPiconPath(self):
 		self._piconPath = self._getPiconPath()
 
+	def _getAutoTimer(self):
+		def _getATSearchtypes():
+			try:
+				from Plugins.Extensions.AutoTimer.AutoTimer import typeMap
+				return typeMap
+			except ImportError:
+				return {}
+
+		_hasAutoTimer = False
+		_hasAutoTimerChange = False
+		_hasAutoTimerTest = False
+		try:
+			from Plugins.Extensions.AutoTimer.AutoTimer import AutoTimer  # noqa: F401
+			_hasAutoTimer = True
+			try:
+				from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerChangeResource  # noqa: F401
+				_hasAutoTimerChange = True
+			except ImportError:
+				pass
+			try:
+				from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerTestResource  # noqa: F401
+				_hasAutoTimerTest = True
+			except ImportError:
+				pass
+		except ImportError:
+			pass
+
+		return _hasAutoTimer, _hasAutoTimerChange, _hasAutoTimerTest, _getATSearchtypes()
+
 	@property
 	def lcnSupport(self):
 		return self._lcnSupport
@@ -394,6 +358,30 @@ class Globals:
 	@property
 	def piconPath(self):
 		return self._piconPath
+
+	@property
+	def hasAutoTimer(self):
+		return self._hasAutoTimer
+
+	@property
+	def hasAutoTimerChange(self):
+		return self._hasAutoTimerChange
+
+	@property
+	def hasAutoTimerTest(self):
+		return self._hasAutoTimerTest
+
+	@property
+	def hasVPS(self):
+		return self._hasVPS
+
+	@property
+	def hasSeries(self):
+		return self._hasSeries
+
+	@property
+	def atSearchTypes(self):
+		return self._atSearchTypes
 
 
 globalVars = Globals()

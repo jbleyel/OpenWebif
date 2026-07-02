@@ -34,7 +34,7 @@ from .models.config import getConfigs, getConfigsSections
 from .models.stream import GetSession, getLive555HlsWebTVBase
 from .base import BaseController
 from .models.locations import getLocations
-from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, globalVars, EXT_EVENT_INFO_SOURCE, HASAUTOTIMER, HASAUTOTIMERTEST, HASAUTOTIMERCHANGE, HASVPS, HASSERIES, ATSEARCHTYPES
+from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, globalVars, EXT_EVENT_INFO_SOURCE
 from .utilities import getUrlArg, getEventInfoProvider
 
 
@@ -108,7 +108,7 @@ class AjaxController(BaseController):
 		if event:
 			event['event']['recording_margin_before'] = config.recording.margin_before.value
 			event['event']['recording_margin_after'] = config.recording.margin_after.value
-			event['at'] = HASAUTOTIMER
+			event['at'] = globalVars.hasAutoTimer
 			event['transcoding'] = globalVars.transcoding
 			event['moviedb'] = config.OpenWebif.webcache.moviedb.value if config.OpenWebif.webcache.moviedb.value else EXT_EVENT_INFO_SOURCE
 			event['extEventInfoProvider'] = getEventInfoProvider(event['moviedb'])
@@ -151,7 +151,7 @@ class AjaxController(BaseController):
 		if len(events) > 0:
 			t = getTimers(self.session)
 			timers = t["timers"]
-			at = HASAUTOTIMER
+			at = globalVars.hasAutoTimer
 		if config.OpenWebif.webcache.theme.value:
 			theme = config.OpenWebif.webcache.theme.value
 		else:
@@ -340,12 +340,12 @@ class AjaxController(BaseController):
 
 	def P_at(self, request):
 		ret = {}
-		ret['hasVPS'] = 1 if HASVPS else 0
-		ret['hasSeriesPlugin'] = 1 if HASSERIES else 0
-		ret['test'] = 1 if HASAUTOTIMERTEST else 0
-		ret['hasChange'] = 1 if HASAUTOTIMERCHANGE else 0
+		ret['hasVPS'] = 1 if globalVars.hasVPS else 0
+		ret['hasSeriesPlugin'] = 1 if globalVars.hasSeries else 0
+		ret['test'] = 1 if globalVars.hasAutoTimerTest else 0
+		ret['hasChange'] = 1 if globalVars.hasAutoTimerChange else 0
 		ret['allow_duplicate'] = getInfo()['allow_duplicate']
-		ret['searchTypes'] = ATSEARCHTYPES
+		ret['searchTypes'] = globalVars.atSearchTypes
 
 		if config.OpenWebif.autotimer_regex_searchtype.value:
 			ret['searchTypes']['regex'] = 0
