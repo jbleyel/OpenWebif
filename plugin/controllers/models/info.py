@@ -37,7 +37,7 @@ from Screens.InfoBar import InfoBar
 from timer import TimerEntry
 
 from ..i18n import _
-from ..defaults import OPENWEBIFVER, TRANSCODING, TEXTINPUTSUPPORT, LCD, GRABPIP
+from ..defaults import OPENWEBIFVER, getTranscoding, TEXTINPUTSUPPORT, getLCD
 from ..utilities import removeBad, removeBad2
 from .epg import EPG
 
@@ -193,8 +193,8 @@ def getInfo(session=None, need_fullinfo=False):
 	info["boxtype"] = BoxInfo.getItem("machinebuild")
 	info["machinebuild"] = BoxInfo.getItem("model")
 
-	info["lcd"] = int(LCD)
-	info["grabpip"] = int(GRABPIP)
+	info["lcd"] = int(getLCD())
+	info["grabpip"] = int(BoxInfo.getItem("ArchIsARM"))
 
 	SH4266 = "SH4 @266MHz"
 
@@ -487,7 +487,7 @@ def getInfo(session=None, need_fullinfo=False):
 					})
 	# TODO: fstab
 
-	info["transcoding"] = TRANSCODING
+	info["transcoding"] = getTranscoding()
 
 	info["EX"] = ""
 
@@ -712,7 +712,7 @@ def getStatusInfo(self):
 	statusinfo = {
 		"volume": vcontrol.getVolume(),
 		"muted": vcontrol.isMuted(),
-		"transcoding": TRANSCODING,
+		"transcoding": getTranscoding(),
 		"currservice_filename": "",
 		"currservice_id": -1,
 	}

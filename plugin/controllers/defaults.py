@@ -64,8 +64,87 @@ def setDebugEnabled(enabled):
 	DEBUG_ENABLED = enabled
 
 
-# Get transcoding feature
+TRANSCODINGNEW = False
+LIVE555HLS = False
+LIVE555RTSP = False
+WEBTV = False
+TRANSCODING = False
+
+
+def initSession():
+	global TRANSCODINGNEW, TRANSCODING, WEBTV, LIVE555HLS, LIVE555RTSP
+	TRANSCODINGNEW = bool(BoxInfo.getItem("HasTranscodingSettings", False))
+	TRANSCODING = _getTranscoding()
+	WEBTV = TRANSCODING
+	LIVE555HLS = _getLive555HLS()
+	LIVE555RTSP = _getLive555RTSP()
+	if TRANSCODINGNEW and BoxInfo.getItem("TranscodingSettingsLive555", False):
+		settings = comp_config.plugins.transcodingsettings
+		settings.rtsp.enabled.addNotifier(refreshTransocdingRTSP, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
+		settings.hls.enabled.addNotifier(refreshTransocdingHLS, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
+		settings.port.addNotifier(refreshTransocding, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
+		settings.enabled.addNotifier(refreshTransocding, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
+
+
+TRANSCODIDINGPROXY = isfile("/usr/bin/transtreamproxy")
+
+
+def getWebTV():
+	return WEBTV
+
+
+def getTranscodingNew():
+	return TRANSCODINGNEW
+
+
 def getTranscoding():
+	return TRANSCODING
+
+
+def getLive555HLS():
+	return LIVE555HLS
+
+
+def _getLive555HLS():
+	if TRANSCODINGNEW and BoxInfo.getItem("TranscodingSettingsLive555", False):
+		setting = comp_config.plugins.transcodingsettings
+
+		return bool(setting.enabled.value
+			and setting.port.value == 8001
+			and setting.hls.enabled.value
+		)
+	return False
+
+
+def _getLive555RTSP():
+	if TRANSCODINGNEW and BoxInfo.getItem("TranscodingSettingsLive555", False):
+		settings = comp_config.plugins.transcodingsettings
+		return bool(settings.enabled.value
+			and settings.port.value == 8001
+			and settings.rtsp.enabled.value
+		)
+	return False
+
+
+def refreshTransocding(configItem):
+	global LIVE555HLS, LIVE555RTSP
+	LIVE555HLS = _getLive555HLS()
+	LIVE555RTSP = _getLive555RTSP()
+
+
+def refreshTransocdingRTSP(configItem):
+	global LIVE555RTSP
+	LIVE555RTSP = _getLive555RTSP()
+
+
+def refreshTransocdingHLS(configItem):
+	global LIVE555HLS
+	LIVE555HLS = _getLive555HLS()
+
+
+def _getTranscoding():
+	if TRANSCODINGNEW:
+		return True
 	if isfile("/proc/stb/encoder/0/bitrate") or exists("/dev/venc0"):
 		return isPluginInstalled("TranscodingSetup") or isPluginInstalled("TransCodingSetup") or isPluginInstalled("MultiTransCodingSetup")
 	return False
@@ -101,7 +180,7 @@ def getPublicPath(file=""):
 	return f"{PUBLIC_PATH}/{file}"
 
 
-def getPiconPath():
+def _getPiconPath():
 
 	# Alternative locations need to come first, as the default location always exists and needs to be the last resort
 	# Sort alternative locations in order of likelyness that they are non-rotational media:
@@ -141,7 +220,7 @@ def getPiconPath():
 
 def refreshPiconPath():
 	global PICON_PATH
-	PICON_PATH = getPiconPath()
+	PICON_PATH = _getPiconPath()
 
 
 def getIP():
@@ -153,15 +232,14 @@ def getIP():
 	return None
 
 
-PICON_PATH = getPiconPath()
+PICON_PATH = _getPiconPath()
+
+
+def getPiconPath():
+	return PICON_PATH
+
 
 EXT_EVENT_INFO_SOURCE = getExtEventInfoProvider()
-
-TRANSCODING = getTranscoding()
-
-VXGENABLED = isfile(getPublicPath("/vxg/media_player.pexe"))
-
-WEBTV = VXGENABLED or TRANSCODING
 
 
 def getOpenwebifPackageVersion():
@@ -326,10 +404,17 @@ TEXTINPUTSUPPORT = getTextInputSupport()
 
 DEFAULT_RCU = getDefaultRcu()
 
-GRABPIP = BoxInfo.getItem("ArchIsARM")
-
 LCD = ("lcd" in MODEL) or ("lcd" in BoxInfo.getItem("displaytype"))
+
+
+def getLCD():
+	return LCD
+
 
 STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(comp_config.misc, "softcam_streamrelay_port")
 
 LCNSUPPORT = BoxInfo.getItem("distro") == "openatv" and getLCNVer() == 2
+
+
+def getLCNSupport():
+	return LCNSUPPORT

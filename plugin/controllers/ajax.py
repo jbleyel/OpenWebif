@@ -31,10 +31,10 @@ from .models.info import getInfo
 from .models.movies import getMovieList, getMovieInfo
 from .models.timers import getTimers
 from .models.config import getConfigs, getConfigsSections
-from .models.stream import GetSession
+from .models.stream import GetSession, getLive555HlsWebTVBase
 from .base import BaseController
 from .models.locations import getLocations
-from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, TRANSCODING, EXT_EVENT_INFO_SOURCE, HASAUTOTIMER, HASAUTOTIMERTEST, HASAUTOTIMERCHANGE, HASVPS, HASSERIES, ATSEARCHTYPES, VXGENABLED
+from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, getTranscoding, getLive555HLS, getTranscodingNew, EXT_EVENT_INFO_SOURCE, HASAUTOTIMER, HASAUTOTIMERTEST, HASAUTOTIMERCHANGE, HASVPS, HASSERIES, ATSEARCHTYPES
 from .utilities import getUrlArg, getEventInfoProvider
 
 
@@ -91,7 +91,7 @@ class AjaxController(BaseController):
 		stype = getUrlArg(request, "stype", "tv")
 		idbouquet = getUrlArg(request, "id", "ALL")
 		channels = getChannels(idbouquet, stype)
-		channels['transcoding'] = TRANSCODING
+		channels['transcoding'] = getTranscoding()
 		channels['type'] = stype
 		channels['showpicons'] = config.OpenWebif.webcache.showpicons.value
 		channels['showpiconbackground'] = config.OpenWebif.webcache.showpiconbackground.value
@@ -109,7 +109,7 @@ class AjaxController(BaseController):
 			event['event']['recording_margin_before'] = config.recording.margin_before.value
 			event['event']['recording_margin_after'] = config.recording.margin_after.value
 			event['at'] = HASAUTOTIMER
-			event['transcoding'] = TRANSCODING
+			event['transcoding'] = getTranscoding()
 			event['moviedb'] = config.OpenWebif.webcache.moviedb.value if config.OpenWebif.webcache.moviedb.value else EXT_EVENT_INFO_SOURCE
 			event['extEventInfoProvider'] = getEventInfoProvider(event['moviedb'])
 		return event
@@ -200,7 +200,7 @@ class AjaxController(BaseController):
 			directory = None
 
 		movies = getMovieList(request.args, directory=directory)
-		movies['transcoding'] = TRANSCODING
+		movies['transcoding'] = getTranscoding()
 
 		sorttype = config.OpenWebif.webcache.moviesort.value
 		unsort = movies['movies']
@@ -279,6 +279,8 @@ class AjaxController(BaseController):
 		ret['allowipkupload'] = config.OpenWebif.allow_upload_ipk.value
 		ret['smallremotes'] = [(x, _('%s Style') % x.capitalize()) for x in config.OpenWebif.webcache.smallremote.choices]
 		ret['smallremote'] = config.OpenWebif.webcache.smallremote.value
+		ret['transcodingmode'] = config.OpenWebif.webcache.transcoding_mode.value
+		ret['transcodingmodes'] = config.OpenWebif.webcache.transcoding_mode.getSelectionList()
 		loc = getLocations()
 		ret['locations'] = loc['locations']
 		if exists(VIEWS_PATH + "/responsive"):
@@ -363,16 +365,20 @@ class AjaxController(BaseController):
 				auth = f"-sid:{session.GetSID(request)}@"
 		else:
 			auth = ""
-		transcoding = TRANSCODING
+		transcoding = getTranscoding()
 		transcoder_port = 0
-		if transcoding:
+		if getTranscodingNew():
+			if config.plugins.transcodingsettings.enabled.value:
+				transcoder_port = config.plugins.transcodingsettings.port.value
+		elif transcoding:
 			try:
 				transcoder_port = int(config.plugins.transcodingsetup.port.value)
 				if BoxInfo.getItem("model") in ('inihdp', 'hd2400', 'et10000', 'et13000', 'sf5008', 'ew7356', 'formuler1tc', 'tiviaraplus', '8100s'):
 					transcoder_port = int(config.OpenWebif.streamport.value)
 			except Exception:
 				transcoder_port = 0
-		return {"transcoder_port": transcoder_port, "vxgenabled": VXGENABLED, "auth": auth, "streaming_port": streaming_port}
+		live555_hls_base = getLive555HlsWebTVBase(request.getRequestHostname()) if getLive555HLS() else ""
+		return {"transcoder_port": transcoder_port, "live555hls": getLive555HLS(), "live555_hls_base": live555_hls_base, "auth": auth, "streaming_port": streaming_port}
 
 	def P_editmovie(self, request):
 		sref = getUrlArg(request, "sRef")
