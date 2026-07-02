@@ -23,7 +23,7 @@ from Components.SystemInfo import BoxInfo
 from Plugins.Plugin import PluginDescriptor
 from Screens.Setup import Setup
 from enigma import getDesktop
-from .controllers.defaults import EXT_EVENT_INFO_SOURCE, getIP, setDebugEnabled, PLUGIN_NAME, PLUGIN_DESCRIPTION, TRANSCODIDINGPROXY, initSession
+from .controllers.defaults import EXT_EVENT_INFO_SOURCE, getIP, setDebugEnabled, PLUGIN_NAME, PLUGIN_DESCRIPTION, TRANSCODIDINGPROXY, globalVars
 
 from .httpserver import HttpdStart, HttpdStop, HttpdRestart
 from .controllers.i18n import _
@@ -197,7 +197,7 @@ def startSession(reason, session):
 		global global_session
 		global_session = session
 		HttpdStart(global_session)
-		initSession()
+		globalVars.initSession()
 
 
 def main_menu(menuid, **kwargs):

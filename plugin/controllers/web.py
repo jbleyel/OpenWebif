@@ -43,7 +43,7 @@ from .i18n import _
 from .base import BaseController
 from .stream import StreamController
 from .utilities import getUrlArg, toBinary, toString
-from .defaults import getPiconPath
+from .defaults import globalVars
 from .models.epg import EPG
 
 
@@ -2641,7 +2641,7 @@ class WebController(BaseController):
 		pp = getPicon(sref, path, False)
 		if pp:
 			if path is None:
-				path = getPiconPath()
+				path = globalVars.piconPath
 			link = pp
 			pp = pp.replace("/picon/", path)
 		if json == 'true':

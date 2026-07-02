@@ -37,7 +37,7 @@ from .wol import WOLSetupController, WOLClientController
 from .file import FileController
 from .MultiBoot import MultiBootController
 from .Scripts import ScriptsController
-from .defaults import getPiconPath, getPublicPath, VIEWS_PATH, setMobile, refreshPiconPath
+from .defaults import getPublicPath, VIEWS_PATH, setMobile, globalVars
 from .utilities import toBinary
 
 
@@ -71,8 +71,8 @@ class RootController(BaseController):
 		self.putChild2("scripts", ScriptsController())
 		self.putChild2("wol", WOLClientController())
 		self.putChild2("wolsetup", WOLSetupController(session))
-		if getPiconPath():
-			self.setPiconChild(getPiconPath())
+		if globalVars.piconPath:
+			self.setPiconChild(globalVars.piconPath)
 		try:
 			from Plugins.Extensions.OpenWebif.controllers.NET import NetController
 			self.putChild2("net", NetController(session))
@@ -84,9 +84,9 @@ class RootController(BaseController):
 			pass
 
 	def onPartitionChange(self, why, part):
-		refreshPiconPath()
-		if getPiconPath():
-			self.setPiconChild(getPiconPath())
+		globalVars.refreshPiconPath()
+		if globalVars.piconPath:
+			self.setPiconChild(globalVars.piconPath)
 
 	def setPiconChild(self, pp):
 		self.putChild2("picon", static.File(toBinary(pp)))

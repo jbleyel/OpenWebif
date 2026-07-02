@@ -34,7 +34,7 @@ from .models.config import getConfigs, getConfigsSections
 from .models.stream import GetSession, getLive555HlsWebTVBase
 from .base import BaseController
 from .models.locations import getLocations
-from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, getTranscoding, getLive555HLS, getTranscodingNew, EXT_EVENT_INFO_SOURCE, HASAUTOTIMER, HASAUTOTIMERTEST, HASAUTOTIMERCHANGE, HASVPS, HASSERIES, ATSEARCHTYPES
+from .defaults import OPENWEBIFVER, getPublicPath, VIEWS_PATH, globalVars, EXT_EVENT_INFO_SOURCE, HASAUTOTIMER, HASAUTOTIMERTEST, HASAUTOTIMERCHANGE, HASVPS, HASSERIES, ATSEARCHTYPES
 from .utilities import getUrlArg, getEventInfoProvider
 
 
@@ -91,7 +91,7 @@ class AjaxController(BaseController):
 		stype = getUrlArg(request, "stype", "tv")
 		idbouquet = getUrlArg(request, "id", "ALL")
 		channels = getChannels(idbouquet, stype)
-		channels['transcoding'] = getTranscoding()
+		channels['transcoding'] = globalVars.transcoding
 		channels['type'] = stype
 		channels['showpicons'] = config.OpenWebif.webcache.showpicons.value
 		channels['showpiconbackground'] = config.OpenWebif.webcache.showpiconbackground.value
@@ -109,7 +109,7 @@ class AjaxController(BaseController):
 			event['event']['recording_margin_before'] = config.recording.margin_before.value
 			event['event']['recording_margin_after'] = config.recording.margin_after.value
 			event['at'] = HASAUTOTIMER
-			event['transcoding'] = getTranscoding()
+			event['transcoding'] = globalVars.transcoding
 			event['moviedb'] = config.OpenWebif.webcache.moviedb.value if config.OpenWebif.webcache.moviedb.value else EXT_EVENT_INFO_SOURCE
 			event['extEventInfoProvider'] = getEventInfoProvider(event['moviedb'])
 		return event
@@ -200,7 +200,7 @@ class AjaxController(BaseController):
 			directory = None
 
 		movies = getMovieList(request.args, directory=directory)
-		movies['transcoding'] = getTranscoding()
+		movies['transcoding'] = globalVars.transcoding
 
 		sorttype = config.OpenWebif.webcache.moviesort.value
 		unsort = movies['movies']
@@ -365,9 +365,9 @@ class AjaxController(BaseController):
 				auth = f"-sid:{session.GetSID(request)}@"
 		else:
 			auth = ""
-		transcoding = getTranscoding()
+		transcoding = globalVars.transcoding
 		transcoder_port = 0
-		if getTranscodingNew():
+		if globalVars.transcodingNew:
 			if config.plugins.transcodingsettings.enabled.value:
 				transcoder_port = config.plugins.transcodingsettings.port.value
 		elif transcoding:
@@ -377,8 +377,8 @@ class AjaxController(BaseController):
 					transcoder_port = int(config.OpenWebif.streamport.value)
 			except Exception:
 				transcoder_port = 0
-		live555_hls_base = getLive555HlsWebTVBase(request.getRequestHostname()) if getLive555HLS() else ""
-		return {"transcoder_port": transcoder_port, "live555hls": getLive555HLS(), "live555_hls_base": live555_hls_base, "auth": auth, "streaming_port": streaming_port}
+		live555_hls_base = getLive555HlsWebTVBase(request.getRequestHostname()) if globalVars.live555Hls else ""
+		return {"transcoder_port": transcoder_port, "live555hls": globalVars.live555Hls, "live555_hls_base": live555_hls_base, "auth": auth, "streaming_port": streaming_port}
 
 	def P_editmovie(self, request):
 		sref = getUrlArg(request, "sRef")

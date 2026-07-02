@@ -16,7 +16,7 @@ from Components.SystemInfo import BoxInfo
 from twisted.web.resource import Resource
 from .info import getInfo
 from ..utilities import getUrlArg
-from ..defaults import STREAMRELAY, getLive555HLS, getTranscodingNew
+from ..defaults import STREAMRELAY, globalVars
 
 BMC0 = "/dev/bcm_enc0"
 ENC0 = "/dev/encoder0"
@@ -315,9 +315,9 @@ def getStream(session, request, m3ufile):
 
 	enc = False
 
-	if getTranscodingNew():
+	if globalVars.transcodingNew:
 		if m3ufile == "streamnew.m3u":
-			if getLive555HLS() and config.OpenWebif.webcache.transcoding_mode.value == 2:
+			if globalVars.live555Hls and config.OpenWebif.webcache.transcoding_mode.value == 2:
 				return _getLive555HlsStream(request, sref, progopt)
 			if device == "phone":
 				enc = True
@@ -459,7 +459,7 @@ def getTS(session, request):
 
 		device = getUrlArg(request, "device")
 
-		if getTranscodingNew():
+		if globalVars.transcodingNew:
 			if config.plugins.transcodingsettings.enabled.value:
 				transcoder_port = config.plugins.transcodingsettings.port.value
 				if device == "phone":
