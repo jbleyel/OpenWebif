@@ -41,6 +41,12 @@ from .defaults import getPublicPath, VIEWS_PATH, setMobile, globalVars
 from .utilities import toBinary
 
 
+class CachedFile(static.File):
+	def render(self, request):
+		request.setHeader("Cache-Control", "public, max-age=86400")
+		return static.File.render(self, request)
+
+
 class RootController(BaseController):
 	"""
 	Root Web Controller
@@ -56,10 +62,10 @@ class RootController(BaseController):
 		self.putChild2("grab", GrabScreenshot(session))
 		self.putChild2('hardware', static.File(toBinary("/usr/share/enigma2/hardware")))
 		for static_val in ('js', 'css', 'static', 'images', 'fonts'):
-			self.putChild2(static_val, static.File(toBinary(getPublicPath(static_val))))
+			self.putChild2(static_val, CachedFile(toBinary(getPublicPath(static_val))))
 		for static_val in ('modern', 'themes', 'webtv', 'vxg'):
 			if exists(getPublicPath(static_val)):
-				self.putChild2(static_val, static.File(toBinary(getPublicPath(static_val))))
+				self.putChild2(static_val, CachedFile(toBinary(getPublicPath(static_val))))
 
 		if exists('/usr/bin/shellinaboxd'):
 			self.putChild2("terminal", proxy.ReverseProxyResource('::1', 4200, b'/'))

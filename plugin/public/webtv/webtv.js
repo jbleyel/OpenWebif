@@ -16,6 +16,10 @@ var PlayerObj = function () {
 			self.pendingStop = null;
 			self.switchRequest = 0;
 			self.hlsSession = 0;
+			self.playRequested = false;
+			self.chromeNativeMonitorGeneration = 0;
+			self.chromeNativeMonitorTimer = null;
+			self.chromeNativeMonitorRequest = null;
 			self.strings = strings || {};
 			self.pl = GetLSValue('webtvplayerl', 'hls');
 			self.pr = GetLSValue('webtvplayerr', 'hls');
@@ -257,38 +261,164 @@ var PlayerObj = function () {
 			var isLive555Hls = isHls && self.live555HlsBase &&
 				url.indexOf(self.live555HlsBase) === 0;
 			if (isLive555Hls) {
-				++self.hlsSession;
-				url += (url.indexOf('?') === -1 ? '?' : '&') +
-					'webtv_session=' + new Date().getTime() + '-' + self.hlsSession;
+				url = self.withNewWebTvSession(url);
 			}
+			self.stopChromeNativeMonitor();
+			self.playRequested = false;
 			if (_hls) {
 				_hls.destroy();
 				_hls = null;
 			}
+			_video.oncanplay = null;
 			_video.pause();
 			_video.removeAttribute('src');
+			_video.load();
 			self.activeLive555Url = isLive555Hls ? url : '';
 
 			if (isHls) {
-				if (_video.canPlayType('application/vnd.apple.mpegurl')) {
+				var hlsJsSupported = typeof Hls !== 'undefined' && Hls.isSupported();
+				var nativeHlsSupported = !!_video.canPlayType('application/vnd.apple.mpegurl');
+				var userAgent = navigator.userAgent || '';
+				var isGoogleChrome = /(?:Chrome|Chromium)\//.test(userAgent) &&
+					!/(?:Edg|Vivaldi|OPR|SamsungBrowser)\//.test(userAgent);
+				var preferNativeHls = nativeHlsSupported &&
+					(!hlsJsSupported || (isLive555Hls && isGoogleChrome));
+				if (window.console)
+					console.info('WebTV HLS backend: ' + (preferNativeHls ? 'native' : 'hls.js'));
+				if (preferNativeHls) {
+					_video.oncanplay = function () {
+						if (self.playRequested) self.startPlayback();
+					};
 					_video.src = url;
-				} else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-					_hls = new Hls();
-					_hls.loadSource(url);
-					_hls.attachMedia(_video);
+					if (isLive555Hls && isGoogleChrome)
+						self.startChromeNativeMonitor(url);
+				} else if (hlsJsSupported) {
+					var hls = new Hls();
+					_hls = hls;
+					hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+						if (_hls === hls) hls.loadSource(url);
+					});
+					hls.on(Hls.Events.MANIFEST_PARSED, function () {
+						if (_hls === hls && self.playRequested) self.startPlayback();
+					});
+					hls.on(Hls.Events.ERROR, function (event, data) {
+						if (_hls !== hls || !data.fatal) return;
+						if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+							hls.startLoad();
+						} else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+							hls.recoverMediaError();
+						} else {
+							if (window.console) console.error('Fatal HLS playback error', data);
+							hls.destroy();
+							if (_hls === hls) _hls = null;
+						}
+					});
+					hls.attachMedia(_video);
+				} else if (nativeHlsSupported) {
+					_video.oncanplay = function () {
+						if (self.playRequested) self.startPlayback();
+					};
+					_video.src = url;
 				}
 			} else {
 				_video.src = url;
 			}
 
+		}, withNewWebTvSession: function (url) {
+			++self.hlsSession;
+			var session = new Date().getTime() + '-' + self.hlsSession;
+			if (/[?&]webtv_session=/.test(url))
+				return url.replace(/([?&]webtv_session=)[^&#]*/, '$1' + session);
+			return url + (url.indexOf('?') === -1 ? '?' : '&') +
+				'webtv_session=' + session;
+
+		}, startChromeNativeMonitor: function (url) {
+			self.stopChromeNativeMonitor();
+			var generation = self.chromeNativeMonitorGeneration;
+			var startedAt = new Date().getTime();
+			var poll = function () {
+				if (generation !== self.chromeNativeMonitorGeneration ||
+					self.activeLive555Url !== url || !self.playRequested) return;
+				var request = $.ajax({
+					url: url,
+					type: 'GET',
+					dataType: 'text',
+					crossDomain: true,
+					timeout: 3000
+				});
+				self.chromeNativeMonitorRequest = request;
+				request.done(function (playlist) {
+					if (generation !== self.chromeNativeMonitorGeneration ||
+						self.activeLive555Url !== url || typeof playlist !== 'string') return;
+					var liveSegments = (playlist.match(/^#EXTINF:/gm) || []).length;
+					if (liveSegments >= 4 && playlist.indexOf('-bootstrap-') === -1) {
+						self.reloadChromeNativeHls(url, generation, liveSegments);
+					}
+				});
+				request.always(function () {
+					if (self.chromeNativeMonitorRequest === request)
+						self.chromeNativeMonitorRequest = null;
+					if (generation === self.chromeNativeMonitorGeneration &&
+						self.activeLive555Url === url &&
+						new Date().getTime() - startedAt < 60000) {
+						self.chromeNativeMonitorTimer = window.setTimeout(poll, 1000);
+					}
+				});
+			};
+			self.chromeNativeMonitorTimer = window.setTimeout(poll, 1000);
+
+		}, reloadChromeNativeHls: function (url, generation, liveSegments) {
+			if (generation !== self.chromeNativeMonitorGeneration ||
+				self.activeLive555Url !== url) return;
+			if (window.console)
+				console.info('Chrome native HLS live playlist stable (' + liveSegments +
+					' segments); rebuilding media element');
+			self.stopChromeNativeMonitor();
+			var refreshedUrl = self.withNewWebTvSession(url);
+			self.activeLive555Url = refreshedUrl;
+			var oldVideo = _video;
+			var volume = oldVideo.volume;
+			var muted = oldVideo.muted;
+			var playbackRate = oldVideo.playbackRate;
+			oldVideo.oncanplay = null;
+			oldVideo.pause();
+			oldVideo.removeAttribute('src');
+			oldVideo.load();
+
+			var newVideo = oldVideo.cloneNode(false);
+			newVideo.volume = volume;
+			newVideo.muted = muted;
+			newVideo.playbackRate = playbackRate;
+			oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+			_video = newVideo;
+			_video.oncanplay = function () {
+				if (self.playRequested) self.startPlayback();
+			};
+			_video.src = refreshedUrl;
+			_video.load();
+			self.startPlayback();
+
+		}, stopChromeNativeMonitor: function () {
+			++self.chromeNativeMonitorGeneration;
+			if (self.chromeNativeMonitorTimer) {
+				window.clearTimeout(self.chromeNativeMonitorTimer);
+				self.chromeNativeMonitorTimer = null;
+			}
+			var request = self.chromeNativeMonitorRequest;
+			self.chromeNativeMonitorRequest = null;
+			if (request) request.abort();
+
 		}, stop: function () {
+			self.stopChromeNativeMonitor();
 			var stopUrl = self.activeLive555Url;
 			self.activeLive555Url = '';
+			self.playRequested = false;
 			if (_hls) {
 				_hls.stopLoad();
 				_hls.destroy();
 				_hls = null;
 			}
+			_video.oncanplay = null;
 			_video.pause();
 			_video.removeAttribute('src');
 			_video.load();
@@ -314,7 +444,18 @@ var PlayerObj = function () {
 			return stopRequest;
 
 		}, play: function () {
-			if (_video) _video.play();
+			self.playRequested = true;
+			self.startPlayback();
+
+		}, startPlayback: function () {
+			if (!_video || !self.playRequested) return;
+			var playPromise = _video.play();
+			if (playPromise && typeof playPromise.catch === 'function') {
+				playPromise.catch(function (error) {
+					if (error.name !== 'AbortError' && window.console)
+						console.warn('Unable to start WebTV playback', error);
+				});
+			}
 
 		}, SortMovies: function () {
 			var idx = GetLSValue('webtvms', 'name');
