@@ -12,15 +12,22 @@ var PlayerObj = function () {
 			self.auth = auth;
 			self.streamingport = streamingport;
 			self.live555HlsBase = live555HlsBase || '';
+			self.activeLive555Url = '';
+			self.pendingStop = null;
+			self.switchRequest = 0;
+			self.hlsSession = 0;
 			self.strings = strings || {};
 			self.pl = GetLSValue('webtvplayerl', 'hls');
 			self.pr = GetLSValue('webtvplayerr', 'hls');
 			self.folderoptions = '';
 			self.dn = '';
+			self.followLive = !!GetLSValue('wfollowlive', false);
 
 			_video = document.getElementById('hlsPlayer');
 
 			$('#sbtn0').click(function () {
+				++self.switchRequest;
+				self.followLive = false;
 				self.stop();
 				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'inline-block');
@@ -30,6 +37,8 @@ var PlayerObj = function () {
 				self.currentp = self.pl;
 			});
 			$('#sbtn1').click(function () {
+				++self.switchRequest;
+				self.followLive = false;
 				self.stop();
 				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'none');
@@ -57,12 +66,14 @@ var PlayerObj = function () {
 				var sref = $("#streamchannels").val();
 				var name = $("#streamchannels option:selected").text();
 				var iptvurl = $("#streamchannels option:selected").attr('data-iptvurl') || '';
-				if (iptvurl) {
-					self.loadUrl(iptvurl, iptvurl.indexOf('.m3u8') !== -1);
-					self.play();
-				} else {
-					self.startLiveChannel(sref, name);
-				}
+				self.afterStop(function (switchRequest) {
+					if (iptvurl) {
+						self.loadUrl(iptvurl, iptvurl.indexOf('.m3u8') !== -1);
+						self.play();
+					} else {
+						self.startLiveChannel(sref, name, switchRequest);
+					}
+				});
 			});
 
 			$("#streamrecordings").chosen({disable_search_threshold: 10, no_results_text: "Oops, nothing found!", width: "400px"});
@@ -78,8 +89,10 @@ var PlayerObj = function () {
 							$('#streamrecordings').trigger("chosen:updated");
 						});
 					} else {
-						self.setUrl(ref, name);
-						self.play();
+						self.afterStop(function () {
+							self.setUrl(ref, name);
+							self.play();
+						});
 					}
 				}
 			});
@@ -89,7 +102,11 @@ var PlayerObj = function () {
 				$('.chosen-container .chosen-drop').css('background-image', 'none');
 			}
 
-			$('#btnstop').click(function () { self.stop(); $(this).blur(); });
+			$('#btnstop').click(function () {
+				++self.switchRequest;
+				self.stop();
+				$(this).blur();
+			});
 
 			$('#wzapstream').prop('checked', GetLSValue('webtvzapstream', false));
 			$('#wzapstream').click(function () {
@@ -147,9 +164,19 @@ var PlayerObj = function () {
 				self.loadBouquets();
 			}
 
-		}, startLiveChannel: function (sref, name) {
+		}, afterStop: function (callback) {
+			var switchRequest = ++self.switchRequest;
+			var stopRequest = self.stop();
+			stopRequest.done(function () {
+				if (switchRequest === self.switchRequest) callback(switchRequest);
+			});
+			stopRequest.fail(function (xhr, status, error) {
+				if (window.console) console.warn('Unable to release Live555 HLS source', status, error);
+			});
+
+		}, startLiveChannel: function (sref, name, switchRequest) {
 			if ($('#wzapstream').is(':checked')) {
-				self.zapAndPlay(sref, name);
+				self.zapAndPlay(sref, name, switchRequest);
 				return;
 			}
 			$.ajax({
@@ -158,39 +185,41 @@ var PlayerObj = function () {
 				cache: false,
 				data: { sRef: sref, sRefPlaying: current_ref || '' },
 				success: function (data) {
+					if (switchRequest !== self.switchRequest) return;
 					if (data.service && data.service.isplayable) {
 						self.setUrl(sref, name, true);
 						self.play();
 					} else {
-						self.confirmZapAndPlay(sref, name);
+						self.confirmZapAndPlay(sref, name, switchRequest);
 					}
 				}
 			});
 
-		}, zapAndPlay: function (sref, name) {
+		}, zapAndPlay: function (sref, name, switchRequest) {
 			$.ajax({
 				url: '/api/zap',
 				dataType: 'json',
 				cache: false,
 				data: { sRef: sref, title: name },
 				success: function () {
+					if (switchRequest !== self.switchRequest) return;
 					self.setUrl(sref, name, true);
 					self.play();
 				}
 			});
 
-		}, confirmZapAndPlay: function (sref, name) {
+		}, confirmZapAndPlay: function (sref, name, switchRequest) {
 			var strings = self.strings;
 
 			if (!$('#modaldialog').length) {
-				if (confirm(strings.notunerfree + ' ' + strings.switchchannelquestion)) self.zapAndPlay(sref, name);
+				if (confirm(strings.notunerfree + ' ' + strings.switchchannelquestion)) self.zapAndPlay(sref, name, switchRequest);
 				return;
 			}
 
 			var buttons = {};
 			buttons[strings.yes] = function () {
 				$(this).dialog('close');
-				self.zapAndPlay(sref, name);
+				self.zapAndPlay(sref, name, switchRequest);
 			};
 			buttons[strings.no] = function () {
 				$(this).dialog('close');
@@ -225,12 +254,20 @@ var PlayerObj = function () {
 			} catch (e) { }
 
 		}, loadUrl: function (url, isHls) {
+			var isLive555Hls = isHls && self.live555HlsBase &&
+				url.indexOf(self.live555HlsBase) === 0;
+			if (isLive555Hls) {
+				++self.hlsSession;
+				url += (url.indexOf('?') === -1 ? '?' : '&') +
+					'webtv_session=' + new Date().getTime() + '-' + self.hlsSession;
+			}
 			if (_hls) {
 				_hls.destroy();
 				_hls = null;
 			}
 			_video.pause();
 			_video.removeAttribute('src');
+			self.activeLive555Url = isLive555Hls ? url : '';
 
 			if (isHls) {
 				if (_video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -245,6 +282,8 @@ var PlayerObj = function () {
 			}
 
 		}, stop: function () {
+			var stopUrl = self.activeLive555Url;
+			self.activeLive555Url = '';
 			if (_hls) {
 				_hls.stopLoad();
 				_hls.destroy();
@@ -252,6 +291,27 @@ var PlayerObj = function () {
 			}
 			_video.pause();
 			_video.removeAttribute('src');
+			_video.load();
+
+			if (!stopUrl) {
+				if (self.pendingStop) return self.pendingStop;
+				return $.Deferred().resolve().promise();
+			}
+
+			var stopRequest = $.ajax({
+				url: stopUrl,
+				type: 'DELETE',
+				crossDomain: true,
+				timeout: 7000
+			});
+			self.pendingStop = stopRequest;
+			stopRequest.fail(function () {
+				if (!self.activeLive555Url) self.activeLive555Url = stopUrl;
+			});
+			stopRequest.always(function () {
+				if (self.pendingStop === stopRequest) self.pendingStop = null;
+			});
+			return stopRequest;
 
 		}, play: function () {
 			if (_video) _video.play();
@@ -269,9 +329,11 @@ var PlayerObj = function () {
 			$('#streamrecordings').trigger("chosen:updated");
 
 		}, setFollowLive: function () {
-			self.stop();
-			self.loadUrl(self.live555HlsBase + '?ref=' + encodeURIComponent(current_ref || ''), true);
-			self.play();
+			self.afterStop(function () {
+  			self.followLive = true;
+  			self.loadUrl(self.live555HlsBase, true);
+  			self.play();
+			});
 
 		}, loadBouquets: function () {
 			$.ajax({
@@ -310,7 +372,7 @@ var PlayerObj = function () {
 					$("#streamchannels").append(options);
 					if (current_ref) $("#streamchannels").val(current_ref);
 					$('#streamchannels').trigger("chosen:updated");
-					if (current_ref && $("#streamchannels").val() === current_ref) {
+					if (!self.followLive && current_ref && $("#streamchannels").val() === current_ref) {
 						var iptvurl = $("#streamchannels option:selected").attr('data-iptvurl') || '';
 						if (iptvurl) {
 							self.loadUrl(iptvurl, iptvurl.indexOf('.m3u8') !== -1);

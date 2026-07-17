@@ -317,7 +317,7 @@ def getStream(session, request, m3ufile):
 
 	if globalVars.transcodingNew:
 		if m3ufile == "streamnew.m3u":
-			if globalVars.live555Hls and config.OpenWebif.webcache.transcoding_mode.value == 2:
+			if globalVars.live555Hls and config.OpenWebif.webcache.transcoding_mode.value == 2 and device == "phone":
 				return _getLive555HlsStream(request, sref, progopt)
 			if device == "phone":
 				enc = True
