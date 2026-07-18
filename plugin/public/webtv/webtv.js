@@ -17,23 +17,20 @@ var PlayerObj = function () {
 			self.switchRequest = 0;
 			self.hlsSession = 0;
 			self.playRequested = false;
-			self.chromeNativeMonitorGeneration = 0;
-			self.chromeNativeMonitorTimer = null;
-			self.chromeNativeMonitorRequest = null;
+			self.nativeLiveMonitorGeneration = 0;
+			self.nativeLiveMonitorTimer = null;
+			self.nativeLiveMonitorRequest = null;
 			self.strings = strings || {};
 			self.pl = GetLSValue('webtvplayerl', 'hls');
 			self.pr = GetLSValue('webtvplayerr', 'hls');
 			self.folderoptions = '';
 			self.dn = '';
-			self.followLive = !!GetLSValue('wfollowlive', false);
 
 			_video = document.getElementById('hlsPlayer');
 
 			$('#sbtn0').click(function () {
 				++self.switchRequest;
-				self.followLive = false;
 				self.stop();
-				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'inline-block');
 				$('#streamchannels_chosen').css('display', 'inline-block');
 				$('#streamrecordings_chosen').css('display', 'none');
@@ -42,25 +39,14 @@ var PlayerObj = function () {
 			});
 			$('#sbtn1').click(function () {
 				++self.switchRequest;
-				self.followLive = false;
 				self.stop();
-				SetLSValue('wfollowlive', false);
 				$('#streambouquets_chosen').css('display', 'none');
 				$('#streamrecordings_chosen').css('display', 'inline-block');
 				$('#streamchannels_chosen').css('display', 'none');
 				$('#moviesort-button').show();
 				self.currentp = self.pr;
 			});
-			$('#sbtn2').click(function () {
-				$('#streambouquets_chosen').css('display', 'none');
-				$('#streamchannels_chosen').css('display', 'none');
-				$('#streamrecordings_chosen').css('display', 'none');
-				$('#moviesort-button').hide();
-				SetLSValue('wfollowlive', true);
-				self.setFollowLive();
-			});
-
-			$("#srcbuttons").buttonset();
+$("#srcbuttons").buttonset();
 			$("#streambouquets").chosen({disable_search_threshold: 5, no_results_text: "Oops, nothing found!", width: "200px"});
 			$("#streambouquets").chosen().change(function () {
 				self.loadBouquet($("#streambouquets").val());
@@ -121,15 +107,7 @@ var PlayerObj = function () {
 			$('#streamchannels_chosen').css('display', 'inline-block');
 			$('#streamrecordings_chosen').css('display', 'none');
 
-			if (self.live555HlsBase) {
-				$('#sbtn2').show();
-				$('#wfollowlivel').show();
-				if (GetLSValue('wfollowlive', false)) {
-					$('#sbtn2').trigger('click');
-				}
-			}
-
-			$.widget("custom.iconselectmenu", $.ui.selectmenu, {
+$.widget("custom.iconselectmenu", $.ui.selectmenu, {
 				_renderItem: function (ul, item) {
 					var li = $("<li>"),
 						wrapper = $("<div>", {text: item.label}).prepend(
@@ -263,7 +241,7 @@ var PlayerObj = function () {
 			if (isLive555Hls) {
 				url = self.withNewWebTvSession(url);
 			}
-			self.stopChromeNativeMonitor();
+			self.stopNativeLiveMonitor();
 			self.playRequested = false;
 			if (_hls) {
 				_hls.destroy();
@@ -281,8 +259,12 @@ var PlayerObj = function () {
 				var userAgent = navigator.userAgent || '';
 				var isGoogleChrome = /(?:Chrome|Chromium)\//.test(userAgent) &&
 					!/(?:Edg|Vivaldi|OPR|SamsungBrowser)\//.test(userAgent);
+				var isAppleSafari = /Safari\//.test(userAgent) &&
+					!/(?:Chrome|Chromium|CriOS|Edg|EdgiOS|EdgA|FxiOS|OPR|Vivaldi|SamsungBrowser)\//.test(userAgent);
+				var needsNativeLiveRefresh = isLive555Hls &&
+					(isGoogleChrome || isAppleSafari);
 				var preferNativeHls = nativeHlsSupported &&
-					(!hlsJsSupported || (isLive555Hls && isGoogleChrome));
+					(!hlsJsSupported || needsNativeLiveRefresh);
 				if (window.console)
 					console.info('WebTV HLS backend: ' + (preferNativeHls ? 'native' : 'hls.js'));
 				if (preferNativeHls) {
@@ -290,8 +272,8 @@ var PlayerObj = function () {
 						if (self.playRequested) self.startPlayback();
 					};
 					_video.src = url;
-					if (isLive555Hls && isGoogleChrome)
-						self.startChromeNativeMonitor(url);
+					if (needsNativeLiveRefresh)
+						self.startNativeLiveMonitor(url);
 				} else if (hlsJsSupported) {
 					var hls = new Hls();
 					_hls = hls;
@@ -332,12 +314,12 @@ var PlayerObj = function () {
 			return url + (url.indexOf('?') === -1 ? '?' : '&') +
 				'webtv_session=' + session;
 
-		}, startChromeNativeMonitor: function (url) {
-			self.stopChromeNativeMonitor();
-			var generation = self.chromeNativeMonitorGeneration;
+		}, startNativeLiveMonitor: function (url) {
+			self.stopNativeLiveMonitor();
+			var generation = self.nativeLiveMonitorGeneration;
 			var startedAt = new Date().getTime();
 			var poll = function () {
-				if (generation !== self.chromeNativeMonitorGeneration ||
+				if (generation !== self.nativeLiveMonitorGeneration ||
 					self.activeLive555Url !== url || !self.playRequested) return;
 				var request = $.ajax({
 					url: url,
@@ -346,34 +328,34 @@ var PlayerObj = function () {
 					crossDomain: true,
 					timeout: 3000
 				});
-				self.chromeNativeMonitorRequest = request;
+				self.nativeLiveMonitorRequest = request;
 				request.done(function (playlist) {
-					if (generation !== self.chromeNativeMonitorGeneration ||
+					if (generation !== self.nativeLiveMonitorGeneration ||
 						self.activeLive555Url !== url || typeof playlist !== 'string') return;
 					var liveSegments = (playlist.match(/^#EXTINF:/gm) || []).length;
 					if (liveSegments >= 4 && playlist.indexOf('-bootstrap-') === -1) {
-						self.reloadChromeNativeHls(url, generation, liveSegments);
+						self.reloadNativeLiveHls(url, generation, liveSegments);
 					}
 				});
 				request.always(function () {
-					if (self.chromeNativeMonitorRequest === request)
-						self.chromeNativeMonitorRequest = null;
-					if (generation === self.chromeNativeMonitorGeneration &&
+					if (self.nativeLiveMonitorRequest === request)
+						self.nativeLiveMonitorRequest = null;
+					if (generation === self.nativeLiveMonitorGeneration &&
 						self.activeLive555Url === url &&
 						new Date().getTime() - startedAt < 60000) {
-						self.chromeNativeMonitorTimer = window.setTimeout(poll, 1000);
+						self.nativeLiveMonitorTimer = window.setTimeout(poll, 1000);
 					}
 				});
 			};
-			self.chromeNativeMonitorTimer = window.setTimeout(poll, 1000);
+			self.nativeLiveMonitorTimer = window.setTimeout(poll, 1000);
 
-		}, reloadChromeNativeHls: function (url, generation, liveSegments) {
-			if (generation !== self.chromeNativeMonitorGeneration ||
+		}, reloadNativeLiveHls: function (url, generation, liveSegments) {
+			if (generation !== self.nativeLiveMonitorGeneration ||
 				self.activeLive555Url !== url) return;
 			if (window.console)
-				console.info('Chrome native HLS live playlist stable (' + liveSegments +
+				console.info('Native HLS live playlist stable (' + liveSegments +
 					' segments); rebuilding media element');
-			self.stopChromeNativeMonitor();
+			self.stopNativeLiveMonitor();
 			var refreshedUrl = self.withNewWebTvSession(url);
 			self.activeLive555Url = refreshedUrl;
 			var oldVideo = _video;
@@ -398,18 +380,18 @@ var PlayerObj = function () {
 			_video.load();
 			self.startPlayback();
 
-		}, stopChromeNativeMonitor: function () {
-			++self.chromeNativeMonitorGeneration;
-			if (self.chromeNativeMonitorTimer) {
-				window.clearTimeout(self.chromeNativeMonitorTimer);
-				self.chromeNativeMonitorTimer = null;
+		}, stopNativeLiveMonitor: function () {
+			++self.nativeLiveMonitorGeneration;
+			if (self.nativeLiveMonitorTimer) {
+				window.clearTimeout(self.nativeLiveMonitorTimer);
+				self.nativeLiveMonitorTimer = null;
 			}
-			var request = self.chromeNativeMonitorRequest;
-			self.chromeNativeMonitorRequest = null;
+			var request = self.nativeLiveMonitorRequest;
+			self.nativeLiveMonitorRequest = null;
 			if (request) request.abort();
 
 		}, stop: function () {
-			self.stopChromeNativeMonitor();
+			self.stopNativeLiveMonitor();
 			var stopUrl = self.activeLive555Url;
 			self.activeLive555Url = '';
 			self.playRequested = false;
@@ -469,13 +451,6 @@ var PlayerObj = function () {
 			$("#streamrecordings").append(options);
 			$('#streamrecordings').trigger("chosen:updated");
 
-		}, setFollowLive: function () {
-			self.afterStop(function () {
-  			self.followLive = true;
-  			self.loadUrl(self.live555HlsBase, true);
-  			self.play();
-			});
-
 		}, loadBouquets: function () {
 			$.ajax({
 				url: '/api/bouquets',
@@ -513,7 +488,7 @@ var PlayerObj = function () {
 					$("#streamchannels").append(options);
 					if (current_ref) $("#streamchannels").val(current_ref);
 					$('#streamchannels').trigger("chosen:updated");
-					if (!self.followLive && current_ref && $("#streamchannels").val() === current_ref) {
+					if (current_ref && $("#streamchannels").val() === current_ref) {
 						var iptvurl = $("#streamchannels option:selected").attr('data-iptvurl') || '';
 						if (iptvurl) {
 							self.loadUrl(iptvurl, iptvurl.indexOf('.m3u8') !== -1);

@@ -363,8 +363,9 @@ def getStream(session, request, m3ufile):
 				args = args.replace("__", urlparam)
 			except Exception:
 				pass
-	# When you use EXTVLCOPT:program in a transcoded stream, VLC does not play stream
-	if config.OpenWebif.service_name_for_stream.value and sref != "" and portnumber != transcoder_port:
+	# A transcoder creates a new MPEG-TS program, so the source service ID must
+	# not be forced in VLC for phone/transcoding requests.
+	if config.OpenWebif.service_name_for_stream.value and sref != "" and not (device == "phone" and enc) and portnumber != transcoder_port:
 		progopt = "%s#EXTVLCOPT:program=%d\n" % (progopt, int(sref.split(":")[3], 16))
 
 	if config.OpenWebif.auth_for_streaming.value:
