@@ -323,6 +323,9 @@ def getStream(session, request, m3ufile):
 				enc = True
 				portnumber = 8002 if config.OpenWebif.webcache.transcoding_mode.value == 1 else 8001
 				args = _newTranscodingArgs(request, urlparam, portnumber)
+
+		elif m3ufile == "streamhls.m3u" and globalVars.live555Hls:
+			return _getLive555HlsStream(request, sref, progopt)
 		else:
 			if config.plugins.transcodingsettings.enabled.value:
 				transcoder_port = config.plugins.transcodingsettings.port.value

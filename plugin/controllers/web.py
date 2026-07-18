@@ -1937,6 +1937,15 @@ class WebController(BaseController):
 			return res
 		return removeCollapsedMenu(getUrlArg(request, "name"))
 
+	def P_streamhls(self, request):
+		self.isCustom = True
+		ref = getUrlArg(request, "ref")
+		name = getUrlArg(request, "name", "")
+		zap = getUrlArg(request, "zap", "")
+		if ref and zap:
+			zapService(self.session, ref, name, stream=True)
+		return getStream(self.session, request, "streamhls.m3u")
+
 	def P_streamnewm3u(self, request):
 		self.isCustom = True
 		if comp_config.OpenWebif.webcache.zapstream.value:
