@@ -227,7 +227,7 @@ def _newTranscodingArgs(request, urlparam, port):
 	return "?" + urlparam.join(parts)
 
 
-def _getLive555HlsStream(request, sref, progopt):
+def _getLive555HlsStream(request, sref, progopt, linkOnly=False):
 	def _live555HlsAuth():
 		user = config.plugins.transcodingsettings.hls.user.value
 		password = config.plugins.transcodingsettings.hls.password.value
@@ -244,6 +244,8 @@ def _getLive555HlsStream(request, sref, progopt):
 
 	hlsUrl = f"http://{_live555HlsAuth()}{request.getRequestHostname()}:{live555HlsPort}/{_live555HlsPath()}.m3u8{_live555HlsArgs(request, sref)}"
 	print(f"[OpenWebif] HLSUrl='{hlsUrl}'")
+	if linkOnly:
+		return hlsUrl
 	response = f"#EXTM3U \n#EXTVLCOPT:http-reconnect=true \n{progopt}{hlsUrl}\n"
 	request.setHeader("Content-Type", "application/vnd.apple.mpegurl")
 	fname = getUrlArg(request, "fname")
@@ -325,7 +327,7 @@ def getStream(session, request, m3ufile):
 				args = _newTranscodingArgs(request, urlparam, portnumber)
 
 		elif m3ufile == "streamhls.m3u" and globalVars.live555Hls:
-			return _getLive555HlsStream(request, sref, progopt)
+			return _getLive555HlsStream(request, sref, progopt, linkOnly=True)
 		else:
 			if config.plugins.transcodingsettings.enabled.value:
 				transcoder_port = config.plugins.transcodingsettings.port.value
@@ -334,6 +336,8 @@ def getStream(session, request, m3ufile):
 					portnumber = transcoder_port
 					args = _newTranscodingArgs(request, urlparam, transcoder_port)
 	else:
+		if m3ufile == "streamhls.m3u":
+			return ""
 		if exists(BMC0):
 			try:
 				transcoder_port = int(config.plugins.transcodingsetup.port.value)

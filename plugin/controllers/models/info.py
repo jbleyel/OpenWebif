@@ -561,6 +561,8 @@ def getInfo(session=None, need_fullinfo=False):
 		print(f"[OpenWebif] -D- RecordTimerEntry check {error}")
 
 	info["textinputsupport"] = TEXTINPUTSUPPORT
+	info["live555Hls"] = globalVars.live555Hls
+	info["live555Rtsp"] = globalVars.live555Rtsp
 	STATICBOXINFO = info
 	return info
 
