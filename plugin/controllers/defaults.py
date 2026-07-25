@@ -195,25 +195,28 @@ STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(c
 
 class Globals:
 	def __init__(self):
-		self.piconPath = self.getPiconPath()
-		self.hasAutoTimer, self.hasAutoTimerChange, self.hasAutoTimerTest, self.atSearchTypes = self.getAutoTimer()
-		self.hasVPS = isPluginInstalled("vps")
-		self.hasSeries = isPluginInstalled("SeriesPlugin")
-		self.lcnSupport = BoxInfo.getItem("distro") == "openatv" and self.getLCNVer() == 2
-		self.lcd = ("lcd" in BoxInfo.getItem("model")) or ("lcd" in BoxInfo.getItem("displaytype"))
+		self._piconPath = self._getPiconPath()
+		self._hasAutoTimer, self._hasAutoTimerChange, self._hasAutoTimerTest, self._atSearchTypes = self._getAutoTimer()
+		self._hasVPS = isPluginInstalled("vps")
+		self._hasSeries = isPluginInstalled("SeriesPlugin")
+		self._lcnSupport = BoxInfo.getItem("distro") == "openatv" and self.getLCNVer() == 2
+		self._lcd = ("lcd" in BoxInfo.getItem("model")) or ("lcd" in BoxInfo.getItem("displaytype"))
 
 	def initSession(self):
-		self.transcodingNew = bool(BoxInfo.getItem("HasTranscodingSettings", False))
-		self.transcoding = self.getTranscoding()
-		self.webTV = self.transcoding
-		self.live555Hls = self.getLive555Hls()
-		self.live555Rtsp = self.getLive555Rtsp()
-		if self.transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
+		self._transcodingNew = bool(BoxInfo.getItem("HasTranscodingSettings", False))
+		self._transcoding = self._getTranscoding()
+		self._webTV = self._transcoding
+		self._live555Hls = self._getLive555Hls()
+		self._live555Rtsp = self._getLive555Rtsp()
+		if self._transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
 			settings = comp_config.plugins.transcodingsettings
 			settings.rtsp.enabled.addNotifier(self.refreshTransocdingRTSP, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
 			settings.hls.enabled.addNotifier(self.refreshTransocdingHLS, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
 			settings.port.addNotifier(self.refreshTransocding, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
 			settings.enabled.addNotifier(self.refreshTransocding, initial_call=False, immediate_feedback=False, call_on_save_or_cancel=True)
+
+		for name, value in vars(self).items():
+			print(f"[OWI] DEBUG SESSION {name} = {value}")
 
 	def getLCNVer(self):
 		ver = 1
@@ -227,15 +230,15 @@ class Globals:
 			pass
 		return ver
 
-	def getTranscoding(self):
-		if self.transcodingNew:
+	def _getTranscoding(self):
+		if self._transcodingNew:
 			return True
 		if isfile("/proc/stb/encoder/0/bitrate") or exists("/dev/venc0"):
 			return isPluginInstalled("TranscodingSetup") or isPluginInstalled("TransCodingSetup") or isPluginInstalled("MultiTransCodingSetup")
 		return False
 
-	def getLive555Hls(self):
-		if self.transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
+	def _getLive555Hls(self):
+		if self._transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
 			setting = comp_config.plugins.transcodingsettings
 			return bool(setting.enabled.value
 				and setting.port.value == 8001
@@ -243,8 +246,8 @@ class Globals:
 			)
 		return False
 
-	def getLive555Rtsp(self):
-		if self.transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
+	def _getLive555Rtsp(self):
+		if self._transcodingNew and BoxInfo.getItem("TranscodingSettingsLive555", False):
 			settings = comp_config.plugins.transcodingsettings
 			return bool(settings.enabled.value
 				and settings.port.value == 8001
@@ -253,16 +256,16 @@ class Globals:
 		return False
 
 	def refreshTransocding(self, configItem):
-		self.live555Hls = self.getLive555Hls()
-		self.live555Rtsp = self.getLive555Rtsp()
+		self._live555Hls = self._getLive555Hls()
+		self._live555Rtsp = self._getLive555Rtsp()
 
 	def refreshTransocdingRTSP(self, configItem):
-		self.live555Rtsp = self.getLive555Rtsp()
+		self._live555Rtsp = self._getLive555Rtsp()
 
 	def refreshTransocdingHLS(self, configItem):
-		self.live555Hls = self.getLive555Hls()
+		self._live555Hls = self._getLive555Hls()
 
-	def getPiconPath(self):
+	def _getPiconPath(self):
 
 		# Alternative locations need to come first, as the default location always exists and needs to be the last resort
 		# Sort alternative locations in order of likelyness that they are non-rotational media:
@@ -292,92 +295,92 @@ class Globals:
 		return None
 
 	def refreshPiconPath(self):
-		self.piconPath = self.getPiconPath()
+		self._piconPath = self._getPiconPath()
 
-	def getAutoTimer(self):
-		def getATSearchtypes():
+	def _getAutoTimer(self):
+		def _getATSearchtypes():
 			try:
 				from Plugins.Extensions.AutoTimer.AutoTimer import typeMap
 				return typeMap
 			except ImportError:
 				return {}
 
-		hasAutoTimer = False
-		hasAutoTimerChange = False
-		hasAutoTimerTest = False
+		_hasAutoTimer = False
+		_hasAutoTimerChange = False
+		_hasAutoTimerTest = False
 		try:
 			from Plugins.Extensions.AutoTimer.AutoTimer import AutoTimer  # noqa: F401
-			hasAutoTimer = True
+			_hasAutoTimer = True
 			try:
 				from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerChangeResource  # noqa: F401
-				hasAutoTimerChange = True
+				_hasAutoTimerChange = True
 			except ImportError:
 				pass
 			try:
 				from Plugins.Extensions.AutoTimer.AutoTimerResource import AutoTimerTestResource  # noqa: F401
-				hasAutoTimerTest = True
+				_hasAutoTimerTest = True
 			except ImportError:
 				pass
 		except ImportError:
 			pass
 
-		return hasAutoTimer, hasAutoTimerChange, hasAutoTimerTest, getATSearchtypes()
+		return _hasAutoTimer, _hasAutoTimerChange, _hasAutoTimerTest, _getATSearchtypes()
 
 	@property
 	def lcnSupport(self):
-		return self.lcnSupport
+		return self._lcnSupport
 
 	@property
 	def lcd(self):
-		return self.lcd
+		return self._lcd
 
 	@property
 	def transcodingNew(self):
-		return self.transcodingNew
+		return self._transcodingNew
 
 	@property
 	def transcoding(self):
-		return self.transcoding
+		return self._transcoding
 
 	@property
 	def webTV(self):
-		return self.webTV
+		return self._webTV
 
 	@property
 	def live555Hls(self):
-		return self.live555Hls
+		return self._live555Hls
 
 	@property
 	def live555Rtsp(self):
-		return self.live555Rtsp
+		return self._live555Rtsp
 
 	@property
 	def piconPath(self):
-		return self.piconPath
+		return self._piconPath
 
 	@property
 	def hasAutoTimer(self):
-		return self.hasAutoTimer
+		return self._hasAutoTimer
 
 	@property
 	def hasAutoTimerChange(self):
-		return self.hasAutoTimerChange
+		return self._hasAutoTimerChange
 
 	@property
 	def hasAutoTimerTest(self):
-		return self.hasAutoTimerTest
+		return self._hasAutoTimerTest
 
 	@property
 	def hasVPS(self):
-		return self.hasVPS
+		return self._hasVPS
 
 	@property
 	def hasSeries(self):
-		return self.hasSeries
+		return self._hasSeries
 
 	@property
 	def atSearchTypes(self):
-		return self.atSearchTypes
+		return self._atSearchTypes
 
 
 globalVars = Globals()
