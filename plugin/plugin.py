@@ -43,12 +43,12 @@ def getTranscodingModeChoices():
 		return [
 			(0, _("Default")),
 			(1, _("Legacy via port 8002")),
-			(2, _("HLS"))
+			(2, "HLS")
 		]
 	else:
 		return [
 			(0, _("Default")),
-			(2, _("HLS"))
+			(2, "HLS")
 		]
 
 

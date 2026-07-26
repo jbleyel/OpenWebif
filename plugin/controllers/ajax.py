@@ -279,6 +279,7 @@ class AjaxController(BaseController):
 		ret['allowipkupload'] = config.OpenWebif.allow_upload_ipk.value
 		ret['smallremotes'] = [(x, _('%s Style') % x.capitalize()) for x in config.OpenWebif.webcache.smallremote.choices]
 		ret['smallremote'] = config.OpenWebif.webcache.smallremote.value
+		ret['transcodingnew'] = globalVars.transcodingNew
 		ret['transcodingmode'] = config.OpenWebif.webcache.transcoding_mode.value
 		ret['transcodingmodes'] = config.OpenWebif.webcache.transcoding_mode.getSelectionList()
 		loc = getLocations()

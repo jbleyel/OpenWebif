@@ -51,6 +51,7 @@
 				<input type="checkbox" name="zapstream"/>
 				#end if
 				</td></tr>
+				#if $transcodingnew
 				<tr><td>$tstrings['transcoding_mode']</td><td>
 				<select name="selecttranscodingmode" id="selecttranscodingmode" style="min-width: 150px;margin: 5px;border:none;font-size: 1em;">
 				#for $sr in $transcodingmodes
@@ -62,6 +63,7 @@
 				#end for
 				</select>
 				</td></tr>
+				#end if
 				<tr><td>$tstrings['show_picons']</td><td>
 				#if $showpicons
 				<input type="checkbox" name="showpicons" checked="checked"/>
