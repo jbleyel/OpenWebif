@@ -195,6 +195,7 @@ STREAMRELAY = hasattr(comp_config.misc, "softcam_streamrelay_url") and hasattr(c
 
 class Globals:
 	def __init__(self):
+		self._piconMode = 0
 		self._piconPath = self._getPiconPath()
 		self._hasAutoTimer, self._hasAutoTimerChange, self._hasAutoTimerTest, self._atSearchTypes = self._getAutoTimer()
 		self._hasVPS = isPluginInstalled("vps")
@@ -266,6 +267,15 @@ class Globals:
 		self._live555Hls = self._getLive555Hls()
 
 	def _getPiconPath(self):
+		try:
+			if comp_config.picon.mode.value:
+				path = getattr(comp_config.picon, f"set{comp_config.picon.openwebif.value}")
+				if exists(path):
+					# print(f"[OpenWebif] Current Picon Path : {path}")
+					self._piconMode = 1
+					return path
+		except Exception:
+			pass
 
 		# Alternative locations need to come first, as the default location always exists and needs to be the last resort
 		# Sort alternative locations in order of likelyness that they are non-rotational media:
@@ -289,7 +299,7 @@ class Globals:
 				for folder in PICON_FOLDERS:
 					current = f"{prefix}{folder}/"
 					if isdir(current):
-						print(f"Current Picon Path : {current}")
+						print(f"[OpenWebif] Current Picon Path : {current}")
 						return current
 
 		return None
@@ -357,6 +367,10 @@ class Globals:
 	@property
 	def piconPath(self):
 		return self._piconPath
+
+	@property
+	def piconMode(self):
+		return self._piconMode
 
 	@property
 	def hasAutoTimer(self):

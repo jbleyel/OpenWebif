@@ -84,10 +84,11 @@ class RootController(BaseController):
 			self.putChild2("net", NetController(session))
 		except:  # nosec # noqa: E722
 			pass
-		try:
-			harddiskmanager.on_partition_list_change.append(self.onPartitionChange)
-		except:  # nosec # noqa: E722
-			pass
+		if globalVars.piconMode == 0:
+			try:
+				harddiskmanager.on_partition_list_change.append(self.onPartitionChange)
+			except:  # nosec # noqa: E722
+				pass
 
 	def onPartitionChange(self, why, part):
 		globalVars.refreshPiconPath()
